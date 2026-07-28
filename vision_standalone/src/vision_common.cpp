@@ -4,9 +4,19 @@
 
 namespace
 {
-    constexpr int kDetectionThreshold = 70;
+    // OpenCV packs the usual 0-360 degree hue wheel into a single byte
+    // (0-179), so these are half of the "normal" hue degrees you'd read
+    // off a color picker. This band covers yellow-green through cyan-green,
+    // calibrated for a green bottle (wine or Sprite).
     constexpr int kBottleHueLow = 35;
     constexpr int kBottleHueHigh = 85;
+
+    // Hue is only meaningful once a pixel actually has some color to it -
+    // right at the gray/black/white axis (very low saturation), the hue
+    // angle is numerically unstable. This floor just excludes those
+    // pixels; it's deliberately loose, since the whole point of matching
+    // on hue is to keep working even when lighting pushes saturation down.
+    constexpr int kMinSaturationForHue = 40;
 }
 
 namespace vision_common
