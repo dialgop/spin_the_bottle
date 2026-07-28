@@ -31,6 +31,9 @@ PointingArea find_pointing_area(const cv::Mat& bgr_image)
 
     PointingDirection direction;
 
+    // Split the bounding box across its longer axis and see which half has
+    // more filled-in pixels - the bottle's neck (and therefore its pointing
+    // end) is thinner, so it should have fewer pixels than its body.
     if ((bottom - top) >= (right - left))
     {
         const int half_height = (bottom - top) / 2;
