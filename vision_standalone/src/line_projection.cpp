@@ -12,6 +12,10 @@ PointingArea find_pointing_area(const cv::Mat& bgr_image)
     cv::Mat mask = vision_common::threshold_mask(bgr_image);
     const std::vector<cv::Point> hull = vision_common::convex_hull_of(mask);
 
+    // find_pointing_area is only meaningful once pre_game has confirmed a
+    // bottle is actually in frame; an empty hull here means that precondition
+    // was skipped, so fall back to a degenerate all-zero area rather than
+    // crashing on boundingRect/countNonZero of nothing.
     if (hull.empty())
     {
         return PointingArea{PointingDirection::Up, 0, 0, 0, 0};
