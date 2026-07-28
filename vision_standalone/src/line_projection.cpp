@@ -9,7 +9,48 @@ namespace line_projection
 
 PointingArea find_pointing_area(const cv::Mat& bgr_image)
 {
-    return {};
+    cv::Mat mask = vision_common::threshold_mask(bgr_image);
+    const std::vector<cv::Point> hull = vision_common::convex_hull_of(mask);
+
+    if (hull.empty())
+    {
+        return PointingArea{PointingDirection::Up, 0, 0, 0, 0};
+    }
+
+    cv::fillConvexPoly(mask, hull, cv::Scalar(255));
+    const cv::Rect bounds = cv::boundingRect(hull);
+
+    const int top = bounds.y;
+    const int bottom = bounds.y + bounds.height;
+    const int left = bounds.x;
+    const int right = bounds.x + bounds.width;
+
+    PointingDirection direction;
+
+    if ((bottom - top) >= (right - left))
+    {
+        const int half_height = (bottom - top) / 2;
+        const cv::Rect upper_half(left, top, right - left, half_height);
+        const cv::Rect lower_half(left, top + half_height, right - left, (bottom - top) - half_height);
+
+        const int pix_up = cv::countNonZero(mask(upper_half));
+        const int pix_down = cv::countNonZero(mask(lower_half));
+
+        direction = (pix_up < pix_down) ? PointingDirection::Up : PointingDirection::Down;
+    }
+    else
+    {
+        const int half_width = (right - left) / 2;
+        const cv::Rect left_half(left, top, half_width, bottom - top);
+        const cv::Rect right_half(left + half_width, top, (right - left) - half_width, bottom - top);
+
+        const int pix_left = cv::countNonZero(mask(left_half));
+        const int pix_right = cv::countNonZero(mask(right_half));
+
+        direction = (pix_left < pix_right) ? PointingDirection::Left : PointingDirection::Right;
+    }
+
+    return PointingArea{direction, top, bottom, left, right};
 }
 
 std::optional<PointingLine> compute_pointing_line(const cv::Mat& bgr_image, const PointingArea& area)
