@@ -63,7 +63,21 @@ namespace vision_common
 
     std::vector<cv::Point> convex_hull_of(const cv::Mat& binary_mask)
     {
-        return std::vector<cv::Point>{};
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(binary_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        std::vector<cv::Point> merged_points;
+        for (const auto& contour : contours)
+        {
+            merged_points.insert(merged_points.end(), contour.begin(), contour.end());
+        }
+
+        std::vector<cv::Point> hull;
+        if (!merged_points.empty())
+        {
+            cv::convexHull(merged_points, hull);
+        }
+        return hull;
     }
 
 }
