@@ -14,7 +14,53 @@ PointingArea find_pointing_area(const cv::Mat& bgr_image)
 
 std::optional<PointingLine> compute_pointing_line(const cv::Mat& bgr_image, const PointingArea& area)
 {
-    return {};
+    const cv::Mat mask = vision_common::threshold_mask(bgr_image);
+    const std::vector<cv::Point> hull = vision_common::convex_hull_of(mask);
+
+    // fitEllipse requires at least 5 points to fit an ellipse through.
+    if (hull.size() < 5)
+    {
+        return std::nullopt;
+    }
+
+    const cv::RotatedRect min_ellipse = cv::fitEllipse(hull);
+    double angle = min_ellipse.angle - 90;
+
+    switch (area.direction)
+    {
+        case PointingDirection::Left:
+            if ((angle > -90 && angle < 0) || (angle > 0 && angle < 90))
+            {
+                angle += 180;
+            }
+            break;
+        case PointingDirection::Up:
+            if (angle > 0 && angle < 180)
+            {
+                angle += 180;
+            }
+            break;
+        case PointingDirection::Right:
+            if (angle > 90 && angle < 270)
+            {
+                angle += 180;
+            }
+            break;
+        case PointingDirection::Down:
+            if ((angle > -90 && angle < 0) || (angle > 180 && angle < 270))
+            {
+                angle += 180;
+            }
+            break;
+    }
+
+    PointingLine line;
+    line.ellipse = min_ellipse;
+    line.angle_degrees = angle;
+    line.line_end.x = min_ellipse.center.x + 100 * std::cos(angle * M_PI / 180);
+    line.line_end.y = min_ellipse.center.y + 100 * std::sin(angle * M_PI / 180);
+
+    return line;
 }
 
     void draw_pointing_line(cv::Mat& image, const PointingLine& line)
