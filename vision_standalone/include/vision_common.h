@@ -19,5 +19,10 @@ namespace vision_common
     // different bottle color.
     cv::Mat threshold_mask(const cv::Mat& bgr_image);
 
+    // Finds contours in a binary mask, merges every contour point together,
+    // and returns the convex hull enclosing all of them. Returns an empty
+    // vector if the mask has no foreground pixels at all - callers must
+    // check for that before doing anything (like fitEllipse) that requires
+    // a minimum number of points.
     std::vector<cv::Point> convex_hull_of(const cv::Mat& binary_mask);
 }
