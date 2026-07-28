@@ -26,6 +26,11 @@ std::optional<PointingLine> compute_pointing_line(const cv::Mat& bgr_image, cons
     const cv::RotatedRect min_ellipse = cv::fitEllipse(hull);
     double angle = min_ellipse.angle - 90;
 
+    // An ellipse fit has no notion of "front" or "back" - it's symmetric.
+    // area.direction (found separately, from which half of the bounding box
+    // had fewer pixels) tells us which of the two possible pointing angles
+    // is actually correct, so flip by 180 degrees when the raw angle picked
+    // the wrong one.
     switch (area.direction)
     {
         case PointingDirection::Left:
