@@ -1,6 +1,7 @@
 // Throwaway test harness: exercises pre_game's functions against a
 // synthetic frame so one can see them run without a real camera or ROS.
 #include "pre_game.h"
+#include "line_projection.h"
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -18,7 +19,7 @@ namespace
                     cv::Point(320 + bottle_shift_x, 300),
                     cv::Size(30, 90),
                     0, 0, 360,
-                    cv::Scalar(20, 20, 20),
+                    cv::Scalar(0, 0, 50),
                     cv::FILLED);
         return frame;
     }
@@ -38,6 +39,25 @@ int main()
 
     const bool moving = pre_game::movement_detected(frame_a, frame_b);
     std::cout << "movement_detected -> " << std::boolalpha << moving << '\n';
+
+    const line_projection::PointingArea area = line_projection::find_pointing_area(frame_a);
+    std::cout << "find_pointing_area -> direction=" << static_cast<int>(area.direction)
+              << " top=" << area.top << " bottom=" << area.bottom
+              << " left=" << area.left << " right=" << area.right << '\n';
+
+    if (const auto line = line_projection::compute_pointing_line(frame_a, area))
+    {
+        std::cout << "compute_pointing_line -> angle=" << line->angle_degrees << " degrees\n";
+
+        cv::Mat annotated = frame_a.clone();
+        line_projection::draw_pointing_line(annotated, *line);
+        cv::imwrite("pointing_line.png", annotated);
+        std::cout << "wrote pointing_line.png\n";
+    }
+    else
+    {
+        std::cout << "compute_pointing_line -> not enough points to fit an ellipse\n";
+    }
 
     return 0;
 }

@@ -9,6 +9,8 @@ find_package(OpenCV 4 REQUIRED)
 add_executable(vision_standalone
     src/main.cpp
     src/pre_game.cpp
+    src/vision_common.cpp
+    src/line_projection.cpp
 )
 
 target_include_directories(vision_standalone PRIVATE include ${OpenCV_INCLUDE_DIRS})
