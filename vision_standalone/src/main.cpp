@@ -1,5 +1,6 @@
-// Throwaway test harness: exercises pre_game's functions against a
-// synthetic frame so one can see them run without a real camera or ROS.
+// Throwaway test harness: exercises pre_game's and line_projection's
+// functions against a synthetic frame so one can see them run without a
+// real camera or ROS.
 #include "pre_game.h"
 #include "line_projection.h"
 
@@ -10,8 +11,11 @@
 namespace
 {
     // Stand-in for a real NAO camera frame until getting one: a plain
-    // saturated background with a dark "bottle" ellipse offset by
+    // background with a dark, saturated "bottle" ellipse offset by
     // bottle_shift_x, so one can exercise the pipeline without hardware.
+    // The bottle color has to be both dark (low V) and richly colored
+    // (high S) to actually clear pre_game's thresholds - a plain gray
+    // ellipse (equal B/G/R, zero saturation) never gets detected at all.
     cv::Mat make_test_frame(int bottle_shift_x)
     {
         cv::Mat frame(480, 640, CV_8UC3, cv::Scalar(60, 140, 60));
