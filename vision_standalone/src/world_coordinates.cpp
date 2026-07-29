@@ -15,6 +15,9 @@ namespace
     // Radius (cm) of the circle of players around the board - 1 meter.
     constexpr double kPlayerCircleRadius = 100;
 
+    // height (cm) of Nao camera
+    constexpr double kNaoBottomCameraHeight = 27.5;
+
     // Returns whichever of a/b has the smaller y, or std::nullopt if even
     // that smaller value is at or behind NAO (y <= 0).
     std::optional<cv::Point2d> pick_point_with_smaller_y(const cv::Point2d& a, const cv::Point2d& b)
@@ -119,6 +122,23 @@ namespace world_coordinates
     HeadPose compute_head_pose(const cv::Point2d& target_point)
     {
         return {};
+        static const double kPitch = std::atan2(kNaoBottomCameraHeight, kPlayerCircleRadius);
+
+        const double yaw_degrees = std::atan2(target_point.y, target_point.x) * 180.0 / M_PI;
+
+        double snapped_degrees = yaw_degrees;
+        if (yaw_degrees >= 0 && yaw_degrees < 36) snapped_degrees = 18;
+        else if (yaw_degrees >= 36 && yaw_degrees < 72) snapped_degrees = 54;
+        else if (yaw_degrees >= 72 && yaw_degrees < 108) snapped_degrees = 90;
+        else if (yaw_degrees >= 108 && yaw_degrees < 144) snapped_degrees = 126;
+        else if (yaw_degrees >= 144 && yaw_degrees <= 180) snapped_degrees = 162;
+
+        snapped_degrees = std::clamp(snapped_degrees, 0.0, 180.0);
+
+        const double yaw_radians = (snapped_degrees - 90.0) * M_PI / 180.0;
+
+        return HeadPose{kPitch, yaw_radians};
+
     }
 
     HeadPose check_pose_correctness_agains_w_coordinates(const cv::Point2d& target_point);
