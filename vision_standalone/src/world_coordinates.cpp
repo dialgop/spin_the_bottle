@@ -121,11 +121,12 @@ namespace world_coordinates
 
     HeadPose compute_head_pose(const cv::Point2d& target_point)
     {
-        return {};
         static const double kPitch = std::atan2(kNaoBottomCameraHeight, kPlayerCircleRadius);
 
         const double yaw_degrees = std::atan2(target_point.y, target_point.x) * 180.0 / M_PI;
 
+        // Snap into one of 5 fixed head positions, 36 degrees apart, spanning
+        // the 0-180 degree forward arc.
         double snapped_degrees = yaw_degrees;
         if (yaw_degrees >= 0 && yaw_degrees < 36) snapped_degrees = 18;
         else if (yaw_degrees >= 36 && yaw_degrees < 72) snapped_degrees = 54;
@@ -133,8 +134,14 @@ namespace world_coordinates
         else if (yaw_degrees >= 108 && yaw_degrees < 144) snapped_degrees = 126;
         else if (yaw_degrees >= 144 && yaw_degrees <= 180) snapped_degrees = 162;
 
+        // find_target_point should only ever hand back points in front of NAO
+        // (y > 0), which keeps yaw_degrees within [0, 180]. Clamp anyway before
+        // this becomes a physical head movement - NAO's neck should never be
+        // asked to turn further than its actual joint limits allow.
         snapped_degrees = std::clamp(snapped_degrees, 0.0, 180.0);
 
+        // Shift so 90 degrees (straight ahead) becomes 0 - what NAO's HeadYaw
+        // joint actually expects.
         const double yaw_radians = (snapped_degrees - 90.0) * M_PI / 180.0;
 
         return HeadPose{kPitch, yaw_radians};
