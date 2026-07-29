@@ -12,6 +12,9 @@ namespace
     // Calibrated: about 2.5 camera pixels per cm of physical distance.
     constexpr double kPixelsPerCm = 2.5;
 
+    // Radius (cm) of the circle of players around the board - 1 meter.
+    constexpr double kPlayerCircleRadius = 100;
+
     // Returns whichever of a/b has the smaller y, or std::nullopt if even
     // that smaller value is at or behind NAO (y <= 0).
     std::optional<cv::Point2d> pick_point_with_smaller_y(const cv::Point2d& a, const cv::Point2d& b)
@@ -50,6 +53,28 @@ namespace world_coordinates
 
     std::optional<cv::Point2d> find_target_point(const WorldPoint& point)
     {
+        const double angle = point.angle_degrees;
+
+        // NAO can't resolve a target in this band to an actual player at the
+        // table - ask for the bottle to be spun again.
+        if (angle >= 205 && angle < 335)
+        {
+            return std::nullopt;
+        }
+
+        // Near-vertical pointing line (x is ~constant): the general slope-based
+        // line equation below breaks down here since tan(90 degrees) is
+        // effectively infinite, so this is solved directly instead.
+        if (angle > 85 && angle < 95)
+        {
+            const double discriminant = kPlayerCircleRadius * kPlayerCircleRadius - point.x * point.x;
+            if (discriminant < 0)
+            {
+                return std::nullopt;
+            }
+            return cv::Point2d(point.x, std::sqrt(discriminant));
+        }
+
         return {};
     }
 
