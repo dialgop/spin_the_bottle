@@ -59,6 +59,25 @@ int main()
         line_projection::draw_pointing_line(annotated, *line);
         cv::imwrite("pointing_line.png", annotated);
         std::cout << "wrote pointing_line.png\n";
+
+        const world_coordinates::WorldPoint world_point =
+            world_coordinates::to_world_coordinates(line->ellipse.center, line->angle_degrees, frame_a);
+        std::cout << "to_world_coordinates -> x=" << world_point.x << " y=" << world_point.y
+                  << " angle=" << world_point.angle_degrees << " degrees\n";
+
+        if (const auto target = world_coordinates::find_target_point(world_point))
+        {
+            std::cout << "find_target_point -> (" << target->x << ", " << target->y << ")\n";
+
+            const world_coordinates::HeadPose pose = world_coordinates::compute_head_pose(*target);
+            std::cout << "compute_head_pose -> pitch=" << pose.pitch_radians
+                      << " rad, yaw=" << pose.yaw_radians << " rad ("
+                      << pose.yaw_radians * 180.0 / M_PI << " degrees)\n";
+        }
+        else
+        {
+            std::cout << "find_target_point -> nullopt (ask for the bottle to be spun again)\n";
+        }
     }
     else
     {
