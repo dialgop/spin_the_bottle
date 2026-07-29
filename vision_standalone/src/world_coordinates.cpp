@@ -3,14 +3,33 @@
 #include <algorithm>
 #include <cmath>
 
+namespace
+{
+    // NAO stands with its feet at the world-coordinate origin; the board
+    // (and therefore the bottle) sits this many cm further along +y.
+    constexpr double kNaoDistanceFromBoard = 45;
+
+    // Calibrated: about 2.5 camera pixels per cm of physical distance.
+    constexpr double kPixelsPerCm = 2.5;
+
+    // Returns whichever of a/b has the smaller y, or std::nullopt if even
+    // that smaller value is at or behind NAO (y <= 0).
+    std::optional<cv::Point2d> pick_point_with_smaller_y(const cv::Point2d& a, const cv::Point2d& b)
+    {
+        const cv::Point2d& smaller = (a.y < b.y) ? a : b;
+        if (smaller.y <= 0)
+        {
+            return std::nullopt;
+        }
+        return smaller;
+    }
+}
+
 namespace world_coordinates
 {
 
     WorldPoint to_world_coordinates(const cv::Point2d& pixel_center, double angle_degrees, const cv::Mat& frame)
     {
-        double kPixelsPerCm = 2.5;
-        double kNaoDistanceFromBoard = 45;
-
         // Pixel coordinates have (0,0) at the top-left with y growing downward;
         // flip to a bottom-left origin to work in ordinary Cartesian coordinates.
         const double cartesian_y = frame.rows - pixel_center.y;
