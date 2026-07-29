@@ -75,7 +75,45 @@ namespace world_coordinates
             return cv::Point2d(point.x, std::sqrt(discriminant));
         }
 
-        return {};
+        // General case: intersect the line through (point.x, point.y) with
+        // slope tan(angle) against the circle of radius kPlayerCircleRadius
+        // centered on NAO. Substituting y = point.y + slope*(x - point.x) into
+        // x^2 + y^2 = r^2 and expanding gives:
+        const double angle_radians = angle * M_PI / 180.0;
+        const double slope = std::tan(angle_radians);
+        const double intercept = point.y - slope * point.x; // where the line crosses x=0
+
+        const double a = 1 + slope * slope;
+        const double b = 2 * slope * intercept;
+        const double c = intercept * intercept - kPlayerCircleRadius * kPlayerCircleRadius;
+
+        const double discriminant = b * b - 4 * a * c;
+        if (discriminant < 0)
+        {
+            return std::nullopt;
+        }
+
+        const double sqrt_discriminant = std::sqrt(discriminant);
+        const double x1 = (-b + sqrt_discriminant) / (2 * a);
+        const double x2 = (-b - sqrt_discriminant) / (2 * a);
+        const double y1 = point.y + slope * (x1 - point.x);
+        const double y2 = point.y + slope * (x2 - point.x);
+
+        if ((angle >= 0 && angle < 85) || (angle > 95 && angle < 180))
+        {
+            // Two candidate roots on opposite sides of the bottle; pick the one
+            // on the side the angle actually points towards.
+            if (angle < 90)
+            {
+                return (x1 < 0) ? cv::Point2d(x2, y2) : cv::Point2d(x1, y1);
+            }
+            return (x1 < 0) ? cv::Point2d(x1, y1) : cv::Point2d(x2, y2);
+        }
+
+        // Remaining bands (180-205, 335-360): pick whichever root is nearer to
+        // NAO, and only accept it if it's actually in front (y > 0).
+        return pick_point_with_smaller_y(cv::Point2d(x1, y1), cv::Point2d(x2, y2));
+
     }
 
     HeadPose compute_head_pose(const cv::Point2d& target_point)
