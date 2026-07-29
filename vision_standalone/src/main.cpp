@@ -3,27 +3,29 @@
 // real camera or ROS.
 #include "pre_game.h"
 #include "line_projection.h"
+#include "world_coordinates.h"
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <iostream>
+#include <cmath>
 
 namespace
 {
     // Stand-in for a real NAO camera frame until getting one: a plain
-    // background with a dark, saturated "bottle" ellipse offset by
-    // bottle_shift_x, so one can exercise the pipeline without hardware.
-    // The bottle color has to be both dark (low V) and richly colored
-    // (high S) to actually clear pre_game's thresholds - a plain gray
-    // ellipse (equal B/G/R, zero saturation) never gets detected at all.
+    // background with a green "bottle" ellipse offset by bottle_shift_x, so
+    // one can exercise the pipeline without hardware. Detection is hue-based
+    // now, so the bottle just needs a hue inside the green band (with some
+    // real saturation) and the background needs to fall outside it - a
+    // muted, low-saturation background keeps it out regardless of hue.
     cv::Mat make_test_frame(int bottle_shift_x)
     {
-        cv::Mat frame(480, 640, CV_8UC3, cv::Scalar(60, 140, 60));
+        cv::Mat frame(480, 640, CV_8UC3, cv::Scalar(130, 125, 120));
         cv::ellipse(frame,
                     cv::Point(320 + bottle_shift_x, 300),
                     cv::Size(30, 90),
                     0, 0, 360,
-                    cv::Scalar(0, 0, 50),
+                    cv::Scalar(34, 177, 76),
                     cv::FILLED);
         return frame;
     }
