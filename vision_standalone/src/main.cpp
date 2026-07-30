@@ -48,6 +48,19 @@ namespace
     void run_world_coordinates_sanity_checks()
     {
         return;
+        using world_coordinates::WorldPoint;
+        using world_coordinates::find_target_point;
+        check_point("general case (45 degrees)",
+                    find_target_point(WorldPoint{0, 50, 45}),
+                    cv::Point2d(41.14, 91.14));
+
+        check_point("vertical case (90 degrees)",
+                    find_target_point(WorldPoint{0, 50, 90}),
+                    cv::Point2d(0, 100));
+
+        check_point("excluded band (270 degrees)",
+                    find_target_point(WorldPoint{0, 50, 270}),
+                    std::nullopt);
     }
 }
 
