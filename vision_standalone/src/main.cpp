@@ -29,6 +29,26 @@ namespace
                     cv::FILLED);
         return frame;
     }
+    void check_point(const char* name, std::optional<cv::Point2d> actual, std::optional<cv::Point2d> expected)
+    {
+        constexpr double kTolerance = 0.01;
+        const bool matches = actual.has_value() == expected.has_value() &&
+            (!actual.has_value() ||
+             (std::abs(actual->x - expected->x) < kTolerance && std::abs(actual->y - expected->y) < kTolerance));
+
+        std::cout << (matches ? "PASS " : "FAIL ") << name << ": got ";
+        if (actual) std::cout << "(" << actual->x << ", " << actual->y << ")";
+        else std::cout << "nullopt";
+        std::cout << ", expected ";
+        if (expected) std::cout << "(" << expected->x << ", " << expected->y << ")";
+        else std::cout << "nullopt";
+        std::cout << '\n';
+    }
+
+    void run_world_coordinates_sanity_checks()
+    {
+        return;
+    }
 }
 
 int main()
