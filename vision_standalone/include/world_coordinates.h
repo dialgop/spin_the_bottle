@@ -24,6 +24,4 @@ namespace world_coordinates
 
     HeadPose compute_head_pose(const cv::Point2d& target_point);
 
-    HeadPose check_pose_correctness_agains_w_coordinates(const cv::Point2d& target_point);
-
 }

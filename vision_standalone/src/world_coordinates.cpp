@@ -148,6 +148,4 @@ namespace world_coordinates
 
     }
 
-    HeadPose check_pose_correctness_agains_w_coordinates(const cv::Point2d& target_point);
-
 }
