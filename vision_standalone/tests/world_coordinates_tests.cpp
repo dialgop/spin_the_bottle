@@ -40,6 +40,19 @@ namespace
         if (!matches) ++failure_count;
     }
 
+    void check_head_pose(const char* name, world_coordinates::HeadPose actual, world_coordinates::HeadPose expected)
+    {
+        constexpr double kTolerance = 0.001;
+        const bool matches = std::abs(actual.pitch_radians - expected.pitch_radians) < kTolerance &&
+            std::abs(actual.yaw_radians - expected.yaw_radians) < kTolerance;
+
+        std::cout << (matches ? "PASS " : "FAIL ") << name << ": got (pitch=" << actual.pitch_radians
+                  << ", yaw=" << actual.yaw_radians << "), expected (pitch=" << expected.pitch_radians
+                  << ", yaw=" << expected.yaw_radians << ")\n";
+
+        if (!matches) ++failure_count;
+    }
+
 }
 
 int main()
@@ -79,6 +92,22 @@ int main()
                       WorldPoint{0, 21, 260});
 
     const double kExpectedPitch = std::atan2(27.5, 100.0);
+
+    check_head_pose("compute_head_pose bucket (45 degrees)",
+                    compute_head_pose(cv::Point2d(100, 100)),
+                    HeadPose{kExpectedPitch, -36.0 * M_PI / 180.0});
+
+    check_head_pose("compute_head_pose bucket (near 0 degrees)",
+                    compute_head_pose(cv::Point2d(100, 1)),
+                    HeadPose{kExpectedPitch, -72.0 * M_PI / 180.0});
+
+    check_head_pose("compute_head_pose bucket (135 degrees)",
+                    compute_head_pose(cv::Point2d(-100, 100)),
+                    HeadPose{kExpectedPitch, 36.0 * M_PI / 180.0});
+
+    check_head_pose("compute_head_pose safety clamp (point behind NAO)",
+                    compute_head_pose(cv::Point2d(100, -50)),
+                    HeadPose{kExpectedPitch, -90.0 * M_PI / 180.0});
 
     if (failure_count > 0)
     {
