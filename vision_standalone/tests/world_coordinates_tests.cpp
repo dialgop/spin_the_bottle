@@ -1,3 +1,8 @@
+// Hand-derived correctness checks for world_coordinates, run independently
+// of the image pipeline - each check compares the function's output against
+// a value worked out by hand (see comments), so a mistake in the geometry
+// can't hide behind a pixel-space round trip through the rest of the vision
+// pipeline. Exits non-zero if any check fails, so this can plug into ctest.
 #include "world_coordinates.h"
 
 #include <cmath>
