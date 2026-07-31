@@ -39,3 +39,14 @@ target_include_directories(line_projection_tests PRIVATE include ${OpenCV_INCLUD
 target_link_libraries(line_projection_tests PRIVATE ${OpenCV_LIBS})
 
 add_test(NAME line_projection_tests COMMAND line_projection_tests)
+
+add_executable(pre_game_tests
+    tests/pre_game_tests.cpp
+    src/pre_game.cpp
+    src/vision_common.cpp
+)
+
+target_include_directories(pre_game_tests PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(pre_game_tests PRIVATE ${OpenCV_LIBS})
+
+add_test(NAME pre_game_tests COMMAND pre_game_tests)
