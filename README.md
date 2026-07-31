@@ -115,22 +115,31 @@ Without a real NAO (or a simulator publishing the same topics/actions), the node
 
 ## Ongoing and future work: `vision_standalone/`
 
-`vision_standalone/` re-implements just the vision half of the pipeline — bottle detection, movement detection, pointing-angle calculation — as a **plain C++17/CMake project with no ROS and no catkin dependency**, so it can be built, run and unit-tested on any machine with OpenCV 4, independent of a robot or a ROS Indigo install.
+on`vision_standalone/` re-implements the vision half of the pipeline — bottle detection, movement detection, pointing-angle calculation, and pixel→head-pose conversion — as a **plain C++17/CMake project with no ROS and no catkin dependency**, so it can be built, run and unit-tested on any machine with OpenCV 4, independent of a robot or a ROS Indigo install.
 
 | Module | Ports | Status |
 |---|---|---|
 | `vision_common` | Shared hue-based bottle mask + convex-hull helper, factored out so `pre_game` and `line_projection` don't duplicate it | Done |
 | `pre_game` | `PreGame::BottleDetected` / `MovementDetected` | Done — reworked to threshold on **Hue** (not brightness/saturation) so detection survives lighting changes better than the 2015 version did |
-| `line_projection` | `LineProjectionE::FindPointingArea` / `drawPointingLine` | Header/API designed (`find_pointing_area`, `compute_pointing_line`, `draw_pointing_line`); implementations are still stubs |
+| `line_projection` | `LineProjectionE::FindPointingArea` / `drawPointingLine` | Done — `find_pointing_area`, `compute_pointing_line` and `draw_pointing_line` port the `fitEllipse` + `convexHull` + `fillConvexPoly` approach from `LineProjectionE.cpp` onto the `vision_common` mask |
+| `world_coordinates` | `WorldCoordinates::getWorldCoordinates` / `getPitchYawHead` | Done — `to_world_coordinates`, `find_target_point` and `compute_head_pose`, including the 5-region head-yaw snapping from the original |
 
-`src/main.cpp` is a throwaway harness that runs the pipeline against a synthetic frame (a colored ellipse drawn on a plain background) so the modules can be exercised without a camera, and writes out `saturation_mask.png` / `pointing_line.png` for a visual sanity check.
+`src/main.cpp` is a throwaway harness that runs the whole pipeline end-to-end against a synthetic frame (a colored ellipse standing in for a real NAO camera frame) so the modules can be exercised without a camera, printing each stage's output and writing out `saturation_mask.png` / `pointing_line.png` for a visual sanity check.
+
+`line_projection` and `world_coordinates` each also have a dedicated test binary under `tests/`, wired into `ctest`:
+
+- **`world_coordinates_tests`** — checks against values worked out by hand from the underlying geometry (line/circle intersection, angle bucketing), independent of the image pipeline.
+- **`line_projection_tests`** — checks against synthetic shapes with known geometry (an asymmetric "bottle" silhouette, a rotated ellipse), with looser tolerances since `fitEllipse`'s output isn't something derivable by hand.
+
+`pre_game` and `vision_common` don't have dedicated test binaries yet — `vision_common` is exercised indirectly through the `line_projection` tests, but `pre_game` is currently only covered by the `main.cpp` harness.
 
 ```bash
 cd vision_standalone
 mkdir -p build && cd build
 cmake ..
 cmake --build .
-./vision_standalone
+./vision_standalone   # runs the synthetic-frame harness
+ctest                 # runs world_coordinates_tests and line_projection_tests
 ```
 
 The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHigh`) is calibrated for a green bottle, matching the wine/Sprite bottle the original project used — recalibrate it if you use a different colored bottle.
@@ -139,11 +148,10 @@ The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHig
 
 Roughly in the order it's expected to happen:
 
-1. **Finish `line_projection`** — implement `find_pointing_area`, `compute_pointing_line` and `draw_pointing_line` (currently stubs), porting the `fitEllipse` + `convexHull` + `fillConvexPoly` approach from `LineProjectionE.cpp` onto the `vision_common` mask.
-2. **Port `WorldCoordinates`** — pixel-angle → NAO head pitch/yaw, as a standalone, testable module (step 3 of the original pipeline, not yet started here).
-3. **Port face detection** — re-add the Haar-cascade step, this time loading the cascade path correctly (see the [known gap](#known-gaps) in the 2015 code).
-4. **Re-integrate with ROS** — once the vision modules are ported and tested standalone, wire them back into a ROS node (or a newer ROS 2 / non-ROS control layer) that talks to NAO, replacing `my_subscriber.cpp`'s monolithic callback with calls into these modules.
-5. **Replace the synthetic-frame harness** — `main.cpp`'s hand-drawn ellipse is a stand-in; once real NAO camera frames (or recordings) are available again, swap them in and add regression tests against them.
+1. **Add unit tests for `pre_game`** — the one remaining module without a dedicated `ctest` binary; currently only exercised via the `main.cpp` harness.
+2. **Port face detection** — re-add the Haar-cascade step, this time loading the cascade path correctly (see the [known gap](#known-gaps) in the 2015 code).
+3. **Re-integrate with ROS** — now that `pre_game`, `line_projection` and `world_coordinates` are all ported and tested standalone, wire them back into a ROS node (or a newer ROS 2 / non-ROS control layer) that talks to NAO, replacing `my_subscriber.cpp`'s monolithic callback with calls into these modules.
+4. **Replace the synthetic-frame harness** — `main.cpp`'s hand-drawn ellipse is a stand-in; once real NAO camera frames (or recordings) are available again, swap them in and add regression tests against them.
 
 ## Repository layout
 
