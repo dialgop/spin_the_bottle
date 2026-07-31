@@ -115,7 +115,7 @@ Without a real NAO (or a simulator publishing the same topics/actions), the node
 
 ## Ongoing and future work: `vision_standalone/`
 
-on`vision_standalone/` re-implements the vision half of the pipeline — bottle detection, movement detection, pointing-angle calculation, and pixel→head-pose conversion — as a **plain C++17/CMake project with no ROS and no catkin dependency**, so it can be built, run and unit-tested on any machine with OpenCV 4, independent of a robot or a ROS Indigo install.
+`vision_standalone/` re-implements the vision half of the pipeline — bottle detection, movement detection, pointing-angle calculation, and pixel→head-pose conversion — as a **plain C++17/CMake project with no ROS and no catkin dependency**, so it can be built, run and unit-tested on any machine with OpenCV 4, independent of a robot or a ROS Indigo install.
 
 | Module | Ports | Status |
 |---|---|---|
@@ -164,7 +164,8 @@ spin_the_bottle/                      catkin package (2015, ROS Indigo)
 └── package.xml, CMakeLists.txt
 
 vision_standalone/                    ROS-free modern rework (2026-)
-├── include/                          pre_game.h, line_projection.h, vision_common.h
+├── include/                          pre_game.h, line_projection.h, world_coordinates.h, vision_common.h
 ├── src/                              implementations + throwaway test harness (main.cpp)
+├── tests/                            world_coordinates_tests.cpp, line_projection_tests.cpp (wired into ctest)
 └── CMakeLists.txt
 ```
