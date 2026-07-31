@@ -54,4 +54,47 @@ int main()
         check_near("find_pointing_area left", area.left, 240, 5);
         check_near("find_pointing_area right", area.right, 360, 5);
     }
+
+    {
+        const cv::Mat frame = make_rotated_ellipse_frame(30);
+        const line_projection::PointingArea area{line_projection::PointingDirection::Up, 0, 0, 0, 0};
+
+        if (const auto line = line_projection::compute_pointing_line(frame, area))
+        {
+            check_near("compute_pointing_line recovers rotated ellipse angle",
+                       line->angle_degrees, -60, 2);
+        }
+        else
+        {
+            check(false, "compute_pointing_line found a line for the rotated ellipse");
+        }
+    }
+
+    {
+        const cv::Mat frame = make_rotated_ellipse_frame(30);
+        const line_projection::PointingArea area = line_projection::find_pointing_area(frame);
+
+        if (const auto line = line_projection::compute_pointing_line(frame, area))
+        {
+            cv::Mat annotated = frame.clone();
+            line_projection::draw_pointing_line(annotated, *line);
+
+            cv::Mat diff;
+            cv::absdiff(frame, annotated, diff);
+            check(cv::countNonZero(diff.reshape(1)) > 0, "draw_pointing_line actually draws something");
+        }
+        else
+        {
+            check(false, "compute_pointing_line found a line to draw");
+        }
+    }
+
+    if (failure_count > 0)
+    {
+        std::cout << failure_count << " check(s) FAILED\n";
+        return 1;
+    }
+
+    std::cout << "all checks passed\n";
+    return 0;
 }
