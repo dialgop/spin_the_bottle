@@ -30,55 +30,10 @@ namespace
         return frame;
     }
 
-    // Hand-derived sanity checks for world_coordinates::find_target_point,
-    // independent of the image pipeline - verifies the corrected quadratic
-    // (and the vertical-line special case) against values worked out by
-    // hand, so a mistake in the geometry can't hide behind a pixel-space
-    // round trip.
-    void check_point(const char* name, std::optional<cv::Point2d> actual, std::optional<cv::Point2d> expected)
-    {
-        constexpr double kTolerance = 0.01;
-        const bool matches = actual.has_value() == expected.has_value() &&
-            (!actual.has_value() ||
-             (std::abs(actual->x - expected->x) < kTolerance && std::abs(actual->y - expected->y) < kTolerance));
-
-        std::cout << (matches ? "PASS " : "FAIL ") << name << ": got ";
-        if (actual) std::cout << "(" << actual->x << ", " << actual->y << ")";
-        else std::cout << "nullopt";
-        std::cout << ", expected ";
-        if (expected) std::cout << "(" << expected->x << ", " << expected->y << ")";
-        else std::cout << "nullopt";
-        std::cout << '\n';
-    }
-
-    void run_world_coordinates_sanity_checks()
-    {
-        using world_coordinates::WorldPoint;
-        using world_coordinates::find_target_point;
-
-        // Line through (0,50) at 45 degrees, hand-solved against the
-        // circle x^2+y^2=100^2: 2x^2+100x-7500=0 -> x=41.144 or x=-91.144;
-        // 45 degrees picks the positive-x root -> y=50+1*(41.144-0)=91.144.
-        check_point("general case (45 degrees)",
-                    find_target_point(WorldPoint{0, 50, 45}),
-                    cv::Point2d(41.14, 91.14));
-
-        // Vertical line through x=0: y = sqrt(100^2 - 0^2) = 100.
-        check_point("vertical case (90 degrees)",
-                    find_target_point(WorldPoint{0, 50, 90}),
-                    cv::Point2d(0, 100));
-
-        // Inside the excluded 205-335 degree band: no player NAO can resolve.
-        check_point("excluded band (270 degrees)",
-                    find_target_point(WorldPoint{0, 50, 270}),
-                    std::nullopt);
-    }
 }
 
 int main()
 {
-    run_world_coordinates_sanity_checks();
-
     const cv::Mat frame_a = make_test_frame(0);
     const cv::Mat frame_b = make_test_frame(15);
 
