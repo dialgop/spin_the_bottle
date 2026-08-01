@@ -6,16 +6,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenCV 4 REQUIRED)
 
+set(FACE_CASCADE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data/haarcascade_frontalface_alt.xml")
+
 add_executable(vision_standalone
     src/main.cpp
     src/pre_game.cpp
     src/vision_common.cpp
     src/line_projection.cpp
     src/world_coordinates.cpp
+    src/face_detection.cpp
 )
 
 target_include_directories(vision_standalone PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(vision_standalone PRIVATE ${OpenCV_LIBS})
+target_compile_definitions(vision_standalone PRIVATE FACE_CASCADE_PATH="${FACE_CASCADE_PATH}")
 
 enable_testing()
 
