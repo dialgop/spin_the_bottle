@@ -32,6 +32,9 @@ namespace face_detection
         cv::cvtColor(bgr_image, gray, cv::COLOR_BGR2GRAY);
         cv::equalizeHist(gray, gray);
 
+        // Blank out the left/right quarters: a face there belongs to whichever
+        // region NAO's neighbour is looking at, not the one it's currently
+        // pointed at.
         const int left_bound = gray.cols / 4;
         const int right_bound = 3 * gray.cols / 4;
         gray(cv::Rect(0, 0, left_bound, gray.rows)).setTo(cv::Scalar(0));

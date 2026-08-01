@@ -25,15 +25,24 @@ namespace
 
 int main()
 {
+    // load_cascade: a path that doesn't exist should fail to load rather
+    // than throwing or crashing.
     check(!face_detection::load_cascade("no_such_file.xml"),
           "load_cascade fails gracefully on a missing file");
 
+    // detect_face: with no cascade successfully loaded, there's nothing to
+    // match against, so this should report nullopt rather than crash.
     check(!face_detection::detect_face(make_blank_frame()).has_value(),
           "detect_face returns nullopt when no cascade is loaded");
 
+    // load_cascade: the real cascade file (copied from the 2015 project's
+    // src/haarcascade_frontalface_alt.xml into vision_standalone/data/)
+    // should load successfully.
     check(face_detection::load_cascade(FACE_CASCADE_PATH),
           "load_cascade succeeds on the checked-in cascade file");
 
+    // detect_face: a plain, featureless frame has nothing resembling a face
+    // in it, so the loaded cascade shouldn't report a false positive.
     check(!face_detection::detect_face(make_blank_frame()).has_value(),
           "detect_face finds nothing in a blank frame");
 
