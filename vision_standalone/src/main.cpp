@@ -4,6 +4,7 @@
 #include "pre_game.h"
 #include "line_projection.h"
 #include "world_coordinates.h"
+#include "face_detection.h"
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
