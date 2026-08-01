@@ -123,14 +123,16 @@ Without a real NAO (or a simulator publishing the same topics/actions), the node
 | `pre_game` | `PreGame::BottleDetected` / `MovementDetected` | Done — reworked to threshold on **Hue** (not brightness/saturation) so detection survives lighting changes better than the 2015 version did |
 | `line_projection` | `LineProjectionE::FindPointingArea` / `drawPointingLine` | Done — `find_pointing_area`, `compute_pointing_line` and `draw_pointing_line` port the `fitEllipse` + `convexHull` + `fillConvexPoly` approach from `LineProjectionE.cpp` onto the `vision_common` mask |
 | `world_coordinates` | `WorldCoordinates::getWorldCoordinates` / `getPitchYawHead` | Done — `to_world_coordinates`, `find_target_point` and `compute_head_pose`, including the 5-region head-yaw snapping from the original |
+| `face_detection` | `DetectFace::detectAndDisplay` | Done — `load_cascade`/`detect_face` port the Haar-cascade check onto the frame's central half, this time loading the cascade from a compile-time path (`FACE_CASCADE_PATH`, pointing at `data/haarcascade_frontalface_alt.xml`) instead of the [known-broken](#known-gaps) `ros::package::getPath` lookup |
 
 `src/main.cpp` is a throwaway harness that runs the whole pipeline end-to-end against a synthetic frame (a colored ellipse standing in for a real NAO camera frame) so the modules can be exercised without a camera, printing each stage's output and writing out `saturation_mask.png` / `pointing_line.png` for a visual sanity check.
 
-`pre_game`, `line_projection` and `world_coordinates` each also have a dedicated test binary under `tests/`, wired into `ctest`:
+`pre_game`, `line_projection`, `world_coordinates` and `face_detection` each also have a dedicated test binary under `tests/`, wired into `ctest`:
 
 - **`world_coordinates_tests`** — checks against values worked out by hand from the underlying geometry (line/circle intersection, angle bucketing), independent of the image pipeline.
 - **`line_projection_tests`** — checks against synthetic shapes with known geometry (an asymmetric "bottle" silhouette, a rotated ellipse), with looser tolerances since `fitEllipse`'s output isn't something derivable by hand.
 - **`pre_game_tests`** — checks `bottle_detected`'s threshold buckets against synthetic frames with known bottle-pixel counts, and `movement_detected`'s diff-threshold logic against identical vs. shifted frames. `BottleState::FullFrame` isn't covered: `threshold_mask` always zeroes out a border band, so a mask covering 100% of the frame can't actually happen through the public API.
+- **`face_detection_tests`** — checks `load_cascade`'s success/failure return value against a missing file and the real checked-in cascade, and checks that `detect_face` returns `nullopt` both with no cascade loaded and against a blank frame. A true-positive check (an actual face being found) isn't covered — a Haar cascade needs a real face image to match against, which isn't available yet; see [Replace the synthetic-frame harness](#future-work) below.
 
 `vision_common` doesn't have its own test binary — it's exercised indirectly through the `pre_game` and `line_projection` tests.
 
@@ -140,7 +142,7 @@ mkdir -p build && cd build
 cmake ..
 cmake --build .
 ./vision_standalone   # runs the synthetic-frame harness
-ctest                 # runs pre_game_tests, world_coordinates_tests and line_projection_tests
+ctest                 # runs pre_game_tests, line_projection_tests, world_coordinates_tests and face_detection_tests
 ```
 
 The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHigh`) is calibrated for a green bottle, matching the wine/Sprite bottle the original project used — recalibrate it if you use a different colored bottle.
@@ -149,9 +151,8 @@ The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHig
 
 Roughly in the order it's expected to happen:
 
-1. **Port face detection** — re-add the Haar-cascade step, this time loading the cascade path correctly (see the [known gap](#known-gaps) in the 2015 code).
-2. **Re-integrate with ROS** — now that `pre_game`, `line_projection` and `world_coordinates` are all ported and tested standalone, wire them back into a ROS node (or a newer ROS 2 / non-ROS control layer) that talks to NAO, replacing `my_subscriber.cpp`'s monolithic callback with calls into these modules.
-3. **Replace the synthetic-frame harness** — `main.cpp`'s hand-drawn ellipse is a stand-in; once real NAO camera frames (or recordings) are available again, swap them in and add regression tests against them.
+1. **Re-integrate with ROS** — now that `pre_game`, `line_projection`, `world_coordinates` and `face_detection` are all ported and tested standalone, wire them back into a ROS node (or a newer ROS 2 / non-ROS control layer) that talks to NAO, replacing `my_subscriber.cpp`'s monolithic callback with calls into these modules.
+2. **Replace the synthetic-frame harness** — `main.cpp`'s hand-drawn ellipse is a stand-in; once real NAO camera frames (or recordings) are available again, swap them in and add regression tests against them. This would also unlock a true-positive test for `face_detection`, which currently can't check that a real face is actually found.
 
 ## Repository layout
 
@@ -164,8 +165,9 @@ spin_the_bottle/                      catkin package (2015, ROS Indigo)
 └── package.xml, CMakeLists.txt
 
 vision_standalone/                    ROS-free modern rework (2026-)
-├── include/                          pre_game.h, line_projection.h, world_coordinates.h, vision_common.h
+├── include/                          pre_game.h, line_projection.h, world_coordinates.h, vision_common.h, face_detection.h
 ├── src/                              implementations + throwaway test harness (main.cpp)
-├── tests/                            pre_game_tests.cpp, line_projection_tests.cpp, world_coordinates_tests.cpp (wired into ctest)
+├── tests/                            pre_game_tests.cpp, line_projection_tests.cpp, world_coordinates_tests.cpp, face_detection_tests.cpp (wired into ctest)
+├── data/                             haarcascade_frontalface_alt.xml (cascade used by face_detection)
 └── CMakeLists.txt
 ```
