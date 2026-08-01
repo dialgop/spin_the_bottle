@@ -75,6 +75,21 @@ int main()
             std::cout << "compute_head_pose -> pitch=" << pose.pitch_radians
                       << " rad, yaw=" << pose.yaw_radians << " rad ("
                       << pose.yaw_radians * 180.0 / M_PI << " degrees)\n";
+
+            // The synthetic frame has no real face in it, so this is only
+            // here to exercise the call - expect "no face found" below.
+            if (!face_detection::load_cascade(FACE_CASCADE_PATH))
+            {
+                std::cout << "face_detection::load_cascade -> failed to load " << FACE_CASCADE_PATH << '\n';
+            }
+            else if (const auto face = face_detection::detect_face(frame_a))
+            {
+                std::cout << "detect_face -> found a face at (" << face->bounds.x << ", " << face->bounds.y << ")\n";
+            }
+            else
+            {
+                std::cout << "detect_face -> no face found\n";
+            }
         }
         else
         {

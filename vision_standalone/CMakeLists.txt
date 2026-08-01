@@ -54,3 +54,14 @@ target_include_directories(pre_game_tests PRIVATE include ${OpenCV_INCLUDE_DIRS}
 target_link_libraries(pre_game_tests PRIVATE ${OpenCV_LIBS})
 
 add_test(NAME pre_game_tests COMMAND pre_game_tests)
+
+add_executable(face_detection_tests
+    tests/face_detection_tests.cpp
+    src/face_detection.cpp
+)
+
+target_include_directories(face_detection_tests PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(face_detection_tests PRIVATE ${OpenCV_LIBS})
+target_compile_definitions(face_detection_tests PRIVATE FACE_CASCADE_PATH="${FACE_CASCADE_PATH}")
+
+add_test(NAME face_detection_tests COMMAND face_detection_tests)
