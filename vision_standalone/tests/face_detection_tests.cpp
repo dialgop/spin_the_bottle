@@ -1,3 +1,12 @@
+// Correctness checks for face_detection's cascade-loading and
+// region-cropping plumbing. Note what these deliberately don't cover: a
+// Haar cascade is trained on real face patterns, so there's no cheap
+// synthetic shape that will make detect_face actually find a face - a true
+// positive check needs a real face image, which isn't available yet (same
+// gap as the synthetic-frame harness in main.cpp - see the README's future
+// work). These checks stick to what's verifiable without one: that loading
+// behaves correctly, and that detect_face never reports a face where there
+// isn't one. Exits non-zero if any check fails, so this can plug into ctest.
 #include "face_detection.h"
 
 #include <opencv2/imgproc.hpp>
