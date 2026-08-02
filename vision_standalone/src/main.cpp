@@ -33,74 +33,69 @@ namespace
         return frame;
     }
 
-}
-
-int main()
-{
-    const cv::Mat frame_a = make_test_frame(0);
-    const cv::Mat frame_b = make_test_frame(15);
-
-    const cv::Mat mask = pre_game::saturation_mask(frame_a);
-    cv::imwrite("saturation_mask.png", mask);
-    std::cout << "wrote saturation_mask.png\n";
-
-    const pre_game::BottleState state = pre_game::bottle_detected(frame_a);
-    std::cout << "bottle_detected -> " << static_cast<int>(state) << '\n';
-
-    const bool moving = pre_game::movement_detected(frame_a, frame_b);
-    std::cout << "movement_detected -> " << std::boolalpha << moving << '\n';
-
-    const line_projection::PointingArea area = line_projection::find_pointing_area(frame_a);
-    std::cout << "find_pointing_area -> direction=" << static_cast<int>(area.direction)
-              << " top=" << area.top << " bottom=" << area.bottom
-              << " left=" << area.left << " right=" << area.right << '\n';
-
-    if (const auto line = line_projection::compute_pointing_line(frame_a, area))
+    // Runs the full pipeline against a single frame and prints each stage's
+    // output, prefixed with frame_index so a video's worth of frames stays
+    // readable. previous_frame is only used for movement_detected's diff.
+    void process_frame(const cv::Mat& frame, const cv::Mat& previous_frame, int frame_index)
     {
-        std::cout << "compute_pointing_line -> angle=" << line->angle_degrees << " degrees\n";
+        const std::string prefix = "[frame " + std::to_string(frame_index) + "] ";
 
-        cv::Mat annotated = frame_a.clone();
-        line_projection::draw_pointing_line(annotated, *line);
-        cv::imwrite("pointing_line.png", annotated);
-        std::cout << "wrote pointing_line.png\n";
+        const cv::Mat mask = pre_game::saturation_mask(frame);
+        cv::imwrite("saturation_mask.png", mask);
 
-        const world_coordinates::WorldPoint world_point =
-            world_coordinates::to_world_coordinates(line->ellipse.center, line->angle_degrees, frame_a);
-        std::cout << "to_world_coordinates -> x=" << world_point.x << " y=" << world_point.y
-                  << " angle=" << world_point.angle_degrees << " degrees\n";
+        const pre_game::BottleState state = pre_game::bottle_detected(frame);
+        std::cout << prefix << "bottle_detected -> " << static_cast<int>(state) << '\n';
 
-        if (const auto target = world_coordinates::find_target_point(world_point))
+        const bool moving = pre_game::movement_detected(frame, previous_frame);
+        std::cout << prefix << "movement_detected -> " << std::boolalpha << moving << '\n';
+
+        const line_projection::PointingArea area = line_projection::find_pointing_area(frame);
+        std::cout << prefix << "find_pointing_area -> direction=" << static_cast<int>(area.direction)
+                  << " top=" << area.top << " bottom=" << area.bottom
+                  << " left=" << area.left << " right=" << area.right << '\n';
+
+        if (const auto line = line_projection::compute_pointing_line(frame, area))
         {
-            std::cout << "find_target_point -> (" << target->x << ", " << target->y << ")\n";
+            std::cout << prefix << "compute_pointing_line -> angle=" << line->angle_degrees << " degrees\n";
 
-            const world_coordinates::HeadPose pose = world_coordinates::compute_head_pose(*target);
-            std::cout << "compute_head_pose -> pitch=" << pose.pitch_radians
-                      << " rad, yaw=" << pose.yaw_radians << " rad ("
-                      << pose.yaw_radians * 180.0 / M_PI << " degrees)\n";
+            cv::Mat annotated = frame.clone();
+            line_projection::draw_pointing_line(annotated, *line);
+            cv::imwrite("pointing_line.png", annotated);
 
-            // The synthetic frame has no real face in it, so this is only
-            // here to exercise the call - expect "no face found" below.
-            if (!face_detection::load_cascade(FACE_CASCADE_PATH))
+            const world_coordinates::WorldPoint world_point =
+                world_coordinates::to_world_coordinates(line->ellipse.center, line->angle_degrees, frame);
+            std::cout << prefix << "to_world_coordinates -> x=" << world_point.x << " y=" << world_point.y
+                      << " angle=" << world_point.angle_degrees << " degrees\n";
+
+            if (const auto target = world_coordinates::find_target_point(world_point))
             {
-                std::cout << "face_detection::load_cascade -> failed to load " << FACE_CASCADE_PATH << '\n';
-            }
-            else if (const auto face = face_detection::detect_face(frame_a))
-            {
-                std::cout << "detect_face -> found a face at (" << face->bounds.x << ", " << face->bounds.y << ")\n";
+                std::cout << prefix << "find_target_point -> (" << target->x << ", " << target->y << ")\n";
+
+                const world_coordinates::HeadPose pose = world_coordinates::compute_head_pose(*target);
+                std::cout << prefix << "compute_head_pose -> pitch=" << pose.pitch_radians
+                          << " rad, yaw=" << pose.yaw_radians << " rad ("
+                          << pose.yaw_radians * 180.0 / M_PI << " degrees)\n";
+
+                if (const auto face = face_detection::detect_face(frame))
+                {
+                    std::cout << prefix << "detect_face -> found a face at (" << face->bounds.x << ", " << face->bounds.y << ")\n";
+                }
+                else
+                {
+                    std::cout << prefix << "detect_face -> no face found\n";
+                }
             }
             else
             {
-                std::cout << "detect_face -> no face found\n";
+                std::cout << prefix << "find_target_point -> nullopt (ask for the bottle to be spun again)\n";
             }
         }
         else
         {
-            std::cout << "find_target_point -> nullopt (ask for the bottle to be spun again)\n";
+            std::cout << prefix << "compute_pointing_line -> not enough points to fit an ellipse\n";
         }
     }
-    else
-    {
-        std::cout << "compute_pointing_line -> not enough points to fit an ellipse\n";
+
     // Reads video_path as a video file and runs process_frame on every
     // consecutive pair of frames. Returns false if the file couldn't be opened.
     bool run_on_video(const std::string& video_path)
@@ -128,7 +123,22 @@ int main()
         return true;
     }
 }
+
+int main(int argc, char** argv)
+{
+    if (!face_detection::load_cascade(FACE_CASCADE_PATH))
+    {
+        std::cout << "face_detection::load_cascade -> failed to load " << FACE_CASCADE_PATH << '\n';
     }
+
+    if (argc > 1)
+    {
+        return run_on_video(argv[1]) ? 0 : 1;
+    }
+
+    const cv::Mat frame_a = make_test_frame(0);
+    const cv::Mat frame_b = make_test_frame(15);
+    process_frame(frame_a, frame_b, 0);
 
     return 0;
 }
