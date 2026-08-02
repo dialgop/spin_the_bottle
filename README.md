@@ -1,13 +1,10 @@
-# Spin the Bottle — NAO Robot Game
+# Spin the Bottle — NAO Robot Game (2015 ROS package)
 
 A ROS package that makes an [Aldebaran/SoftBank NAO](https://en.wikipedia.org/wiki/Nao_(robot)) robot referee a game of spin-the-bottle: it watches a real bottle with its camera, works out where it's pointing once it stops spinning, turns its head to look at that spot, and asks whoever it sees to take their turn.
 
-Originally built by **Diego Alejandro Gómez Pardo** in 2015 as a project for the Humanoid Robotics Praktikum at the University of Bonn — the original report is in [`spin_the_bottle/documentation/Report.pdf`](spin_the_bottle/documentation/Report.pdf). This repo is now a personal, ongoing rework of that project.
+Originally built by **Diego Alejandro Gómez Pardo** in 2015 as a project for the Humanoid Robotics Praktikum at the University of Bonn — the original report is in [`spin_the_bottle/documentation/Report.pdf`](spin_the_bottle/documentation/Report.pdf).
 
-The repo now contains two things:
-
-- **`spin_the_bottle/`** — the original 2015 ROS (Indigo) / OpenCV package that ran on the physical robot.
-- **`vision_standalone/`** — a from-scratch, ROS-free reimplementation of the vision pipeline, started in 2026, that ports the working ideas from `spin_the_bottle` into modern C++17/CMake so they can be developed and tested without a robot or a ROS install. See [Ongoing and future work](#ongoing-and-future-work-vision_standalone) below.
+This branch, `nao-2015`, is a frozen archive of that original ROS (Indigo) / OpenCV package as it ran on the physical robot. Ongoing development has moved to a ROS-free C++17/CMake rework — see the [`master`](../../tree/master) branch's `vision_standalone/`.
 
 ## The game
 
@@ -113,47 +110,6 @@ rosrun spin_the_bottle subscriber
 
 Without a real NAO (or a simulator publishing the same topics/actions), the node won't do anything useful — the whole pipeline is driven by the `camera/image_raw` subscription, and the head/speech steps depend on NAO's `naoqi_bridge` action servers being up.
 
-## Ongoing and future work: `vision_standalone/`
-
-`vision_standalone/` re-implements the vision half of the pipeline — bottle detection, movement detection, pointing-angle calculation, and pixel→head-pose conversion — as a **plain C++17/CMake project with no ROS and no catkin dependency**, so it can be built, run and unit-tested on any machine with OpenCV 4, independent of a robot or a ROS Indigo install.
-
-| Module | Ports | Status |
-|---|---|---|
-| `vision_common` | Shared hue-based bottle mask + convex-hull helper, factored out so `pre_game` and `line_projection` don't duplicate it | Done |
-| `pre_game` | `PreGame::BottleDetected` / `MovementDetected` | Done — reworked to threshold on **Hue** (not brightness/saturation) so detection survives lighting changes better than the 2015 version did |
-| `line_projection` | `LineProjectionE::FindPointingArea` / `drawPointingLine` | Done — `find_pointing_area`, `compute_pointing_line` and `draw_pointing_line` port the `fitEllipse` + `convexHull` + `fillConvexPoly` approach from `LineProjectionE.cpp` onto the `vision_common` mask |
-| `world_coordinates` | `WorldCoordinates::getWorldCoordinates` / `getPitchYawHead` | Done — `to_world_coordinates`, `find_target_point` and `compute_head_pose`, including the 5-region head-yaw snapping from the original |
-| `face_detection` | `DetectFace::detectAndDisplay` | Done — `load_cascade`/`detect_face` port the Haar-cascade check onto the frame's central half, this time loading the cascade from a compile-time path (`FACE_CASCADE_PATH`, pointing at `data/haarcascade_frontalface_alt.xml`) instead of the [known-broken](#known-gaps) `ros::package::getPath` lookup |
-
-`src/main.cpp` is a throwaway harness that runs the whole pipeline end-to-end against a synthetic frame (a colored ellipse standing in for a real NAO camera frame) so the modules can be exercised without a camera, printing each stage's output and writing out `saturation_mask.png` / `pointing_line.png` for a visual sanity check.
-
-`pre_game`, `line_projection`, `world_coordinates` and `face_detection` each also have a dedicated test binary under `tests/`, wired into `ctest`:
-
-- **`world_coordinates_tests`** — checks against values worked out by hand from the underlying geometry (line/circle intersection, angle bucketing), independent of the image pipeline.
-- **`line_projection_tests`** — checks against synthetic shapes with known geometry (an asymmetric "bottle" silhouette, a rotated ellipse), with looser tolerances since `fitEllipse`'s output isn't something derivable by hand.
-- **`pre_game_tests`** — checks `bottle_detected`'s threshold buckets against synthetic frames with known bottle-pixel counts, and `movement_detected`'s diff-threshold logic against identical vs. shifted frames. `BottleState::FullFrame` isn't covered: `threshold_mask` always zeroes out a border band, so a mask covering 100% of the frame can't actually happen through the public API.
-- **`face_detection_tests`** — checks `load_cascade`'s success/failure return value against a missing file and the real checked-in cascade, and checks that `detect_face` returns `nullopt` both with no cascade loaded and against a blank frame. A true-positive check (an actual face being found) isn't covered — a Haar cascade needs a real face image to match against, which isn't available yet; see [Replace the synthetic-frame harness](#future-work) below.
-
-`vision_common` doesn't have its own test binary — it's exercised indirectly through the `pre_game` and `line_projection` tests.
-
-```bash
-cd vision_standalone
-mkdir -p build && cd build
-cmake ..
-cmake --build .
-./vision_standalone   # runs the synthetic-frame harness
-ctest                 # runs pre_game_tests, line_projection_tests, world_coordinates_tests and face_detection_tests
-```
-
-The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHigh`) is calibrated for a green bottle, matching the wine/Sprite bottle the original project used — recalibrate it if you use a different colored bottle.
-
-### Future work
-
-Roughly in the order it's expected to happen:
-
-1. **Re-integrate with ROS** — now that `pre_game`, `line_projection`, `world_coordinates` and `face_detection` are all ported and tested standalone, wire them back into a ROS node (or a newer ROS 2 / non-ROS control layer) that talks to NAO, replacing `my_subscriber.cpp`'s monolithic callback with calls into these modules.
-2. **Replace the synthetic-frame harness** — `main.cpp`'s hand-drawn ellipse is a stand-in; once real NAO camera frames (or recordings) are available again, swap them in and add regression tests against them. This would also unlock a true-positive test for `face_detection`, which currently can't check that a real face is actually found.
-
 ## Repository layout
 
 ```
@@ -163,11 +119,4 @@ spin_the_bottle/                      catkin package (2015, ROS Indigo)
 ├── behaviors/bottlehello/            Choregraphe behavior played at game start
 ├── documentation/Report.pdf          original 2015 project report
 └── package.xml, CMakeLists.txt
-
-vision_standalone/                    ROS-free modern rework (2026-)
-├── include/                          pre_game.h, line_projection.h, world_coordinates.h, vision_common.h, face_detection.h
-├── src/                              implementations + throwaway test harness (main.cpp)
-├── tests/                            pre_game_tests.cpp, line_projection_tests.cpp, world_coordinates_tests.cpp, face_detection_tests.cpp (wired into ctest)
-├── data/                             haarcascade_frontalface_alt.xml (cascade used by face_detection)
-└── CMakeLists.txt
 ```
