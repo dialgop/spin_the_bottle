@@ -1,6 +1,7 @@
-// Throwaway test harness: exercises pre_game's and line_projection's
-// functions against a synthetic frame so one can see them run without a
-// real camera or ROS.
+// Throwaway test harness: exercises pre_game's, line_projection's,
+// world_coordinates's and face_detection's functions against either a
+// synthetic frame or a real video file, so one can see them run without ROS
+// or live NAO hardware.
 #include "pre_game.h"
 #include "line_projection.h"
 #include "world_coordinates.h"
@@ -8,6 +9,7 @@
 
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/videoio.hpp>
 #include <iostream>
 #include <cmath>
 
@@ -99,6 +101,33 @@ int main()
     else
     {
         std::cout << "compute_pointing_line -> not enough points to fit an ellipse\n";
+    // Reads video_path as a video file and runs process_frame on every
+    // consecutive pair of frames. Returns false if the file couldn't be opened.
+    bool run_on_video(const std::string& video_path)
+    {
+        cv::VideoCapture capture(video_path);
+        if (!capture.isOpened())
+        {
+            std::cerr << "failed to open video: " << video_path << '\n';
+            return false;
+        }
+
+        cv::Mat previous_frame, frame;
+        int frame_index = 0;
+        while (capture.read(frame))
+        {
+            if (!previous_frame.empty())
+            {
+                process_frame(frame, previous_frame, frame_index);
+            }
+            previous_frame = frame.clone();
+            ++frame_index;
+        }
+
+        std::cout << "processed " << frame_index << " frame(s) from " << video_path << '\n';
+        return true;
+    }
+}
     }
 
     return 0;
