@@ -36,6 +36,13 @@ namespace
     // Runs the full pipeline against a single frame and prints each stage's
     // output, prefixed with frame_index so a video's worth of frames stays
     // readable. previous_frame is only used for movement_detected's diff.
+    //
+    // detect_face runs unconditionally on every frame rather than being
+    // gated behind a successful pointing/target chain: on the real robot
+    // it's a separate step using NAO's other camera, run only after the
+    // head has turned, so it shouldn't depend on this frame also containing
+    // a bottle - that's what lets a face-only video (no bottle at all) be
+    // used to test it.
     void process_frame(const cv::Mat& frame, const cv::Mat& previous_frame, int frame_index)
     {
         const std::string prefix = "[frame " + std::to_string(frame_index) + "] ";

@@ -71,12 +71,26 @@ int main()
     check(!face_detection::detect_face(make_blank_frame()).has_value(),
           "detect_face finds nothing in a blank frame");
 
+    // The checks below run against real recorded footage in
+    // data/faces_examples/ (a synthetic AI-generated face from
+    // thispersondoesnotexist.com, a dog, and an empty background - "Small
+    // cacti with a white wall background" via rawpixel.com) - this is the
+    // true-positive coverage a synthetic frame can't provide, since a Haar
+    // cascade needs an actual face pattern to match against.
     check(any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Man_surprised_nao.mp4"),
           "detect_face finds a face somewhere in a real video of a human face");
 
     check(!any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Background_no_person_nao.mp4"),
           "detect_face finds nothing in a real video of an empty background");
 
+    // This asserts true, not false: this Haar cascade is known to
+    // false-positive on Dog_happy_nao.mp4, a weakness of Haar cascades in
+    // general (their gradient-based features can match an animal face
+    // front-on closely enough to trigger). Pinning down this known-bad
+    // behavior explicitly - rather than leaving it as an unverified comment -
+    // means this check starts failing the moment that changes (e.g. once the
+    // planned ONNX-based replacement lands, see the README), which is exactly
+    // when it should be flipped to expect false instead.
     check(any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Dog_happy_nao.mp4"),
           "detect_face false-positives on a dog's face (known Haar-cascade limitation, see README)");
 
