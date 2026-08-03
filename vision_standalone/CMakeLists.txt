@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(OpenCV 4 REQUIRED)
 
 set(FACE_CASCADE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data/haarcascade_frontalface_alt.xml")
+set(FACE_EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data/faces_examples")
 
 add_executable(vision_standalone
     src/main.cpp
@@ -62,6 +63,9 @@ add_executable(face_detection_tests
 
 target_include_directories(face_detection_tests PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(face_detection_tests PRIVATE ${OpenCV_LIBS})
-target_compile_definitions(face_detection_tests PRIVATE FACE_CASCADE_PATH="${FACE_CASCADE_PATH}")
+target_compile_definitions(face_detection_tests PRIVATE
+    FACE_CASCADE_PATH="${FACE_CASCADE_PATH}"
+    FACE_EXAMPLES_DIR="${FACE_EXAMPLES_DIR}"
+)
 
 add_test(NAME face_detection_tests COMMAND face_detection_tests)
