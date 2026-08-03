@@ -1,19 +1,19 @@
-// Correctness checks for face_detection's cascade-loading and
-// region-cropping plumbing. Note what these deliberately don't cover: a
-// Haar cascade is trained on real face patterns, so there's no cheap
-// synthetic shape that will make detect_face actually find a face - a true
-// positive check needs a real face image, which isn't available yet (same
-// gap as the synthetic-frame harness in main.cpp - see the README's future
-// work). These checks stick to what's verifiable without one: that loading
-// behaves correctly, and that detect_face never reports a face where there
-// isn't one. Exits non-zero if any check fails, so this can plug into ctest.
+// Correctness checks for face_detection's cascade-loading, region-cropping
+// plumbing, and real-footage detection accuracy. Exits non-zero if any check
+// fails, so this can plug into ctest.
 #include "face_detection.h"
 
 #include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
 #include <iostream>
+#include <string>
 
 #ifndef FACE_CASCADE_PATH
 #error "FACE_CASCADE_PATH must be defined by CMake to the cascade xml path"
+#endif
+
+#ifndef FACE_EXAMPLES_DIR
+#error "FACE_EXAMPLES_DIR must be defined by CMake to the face examples directory"
 #endif
 
 namespace
@@ -29,6 +29,22 @@ namespace
     cv::Mat make_blank_frame()
     {
         return cv::Mat(480, 640, CV_8UC3, cv::Scalar(130, 125, 120));
+    }
+
+    // Returns true if detect_face finds a face in at least one frame of the
+    // video at video_path.
+    bool any_frame_has_face(const std::string& video_path)
+    {
+        cv::VideoCapture capture(video_path);
+        cv::Mat frame;
+        while (capture.read(frame))
+        {
+            if (face_detection::detect_face(frame))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
@@ -54,6 +70,15 @@ int main()
     // in it, so the loaded cascade shouldn't report a false positive.
     check(!face_detection::detect_face(make_blank_frame()).has_value(),
           "detect_face finds nothing in a blank frame");
+
+    check(any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Man_surprised_nao.mp4"),
+          "detect_face finds a face somewhere in a real video of a human face");
+
+    check(!any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Background_no_person_nao.mp4"),
+          "detect_face finds nothing in a real video of an empty background");
+
+    check(any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Dog_happy_nao.mp4"),
+          "detect_face false-positives on a dog's face (known Haar-cascade limitation, see README)");
 
     if (failure_count > 0)
     {
