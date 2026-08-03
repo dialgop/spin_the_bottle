@@ -75,15 +75,6 @@ namespace
                 std::cout << prefix << "compute_head_pose -> pitch=" << pose.pitch_radians
                           << " rad, yaw=" << pose.yaw_radians << " rad ("
                           << pose.yaw_radians * 180.0 / M_PI << " degrees)\n";
-
-                if (const auto face = face_detection::detect_face(frame))
-                {
-                    std::cout << prefix << "detect_face -> found a face at (" << face->bounds.x << ", " << face->bounds.y << ")\n";
-                }
-                else
-                {
-                    std::cout << prefix << "detect_face -> no face found\n";
-                }
             }
             else
             {
@@ -93,6 +84,15 @@ namespace
         else
         {
             std::cout << prefix << "compute_pointing_line -> not enough points to fit an ellipse\n";
+        }
+
+        if (const auto face = face_detection::detect_face(frame))
+        {
+            std::cout << prefix << "detect_face -> found a face at (" << face->bounds.x << ", " << face->bounds.y << ")\n";
+        }
+        else
+        {
+            std::cout << prefix << "detect_face -> no face found\n";
         }
     }
 
