@@ -133,9 +133,9 @@ namespace
 
 int main(int argc, char** argv)
 {
-    if (!face_detection::load_cascade(FACE_CASCADE_PATH))
+    if (!face_detection::load_model(FACE_MODEL_PATH))
     {
-        std::cout << "face_detection::load_cascade -> failed to load " << FACE_CASCADE_PATH << '\n';
+        std::cout << "face_detection::load_model -> failed to load " << FACE_MODEL_PATH << '\n';
     }
 
     if (argc > 1)

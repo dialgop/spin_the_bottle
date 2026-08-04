@@ -8,8 +8,8 @@
 #include <iostream>
 #include <string>
 
-#ifndef FACE_CASCADE_PATH
-#error "FACE_CASCADE_PATH must be defined by CMake to the cascade xml path"
+#ifndef FACE_MODEL_PATH
+#error "FACE_MODEL_PATH must be defined by CMake to the YuNet onnx model path"
 #endif
 
 #ifndef FACE_EXAMPLES_DIR
@@ -52,19 +52,21 @@ int main()
 {
     // load_cascade: a path that doesn't exist should fail to load rather
     // than throwing or crashing.
-    check(!face_detection::load_cascade("no_such_file.xml"),
-          "load_cascade fails gracefully on a missing file");
+    check(!face_detection::load_model("no_such_file.onnx"),
+          "load_model fails gracefully on a missing file");
 
     // detect_face: with no cascade successfully loaded, there's nothing to
     // match against, so this should report nullopt rather than crash.
     check(!face_detection::detect_face(make_blank_frame()).has_value(),
-          "detect_face returns nullopt when no cascade is loaded");
+          "detect_face returns nullopt when no model is loaded");
 
     // load_cascade: the real cascade file (copied from the 2015 project's
     // src/haarcascade_frontalface_alt.xml into vision_standalone/data/)
     // should load successfully.
     check(face_detection::load_cascade(FACE_CASCADE_PATH),
           "load_cascade succeeds on the checked-in cascade file");
+    check(face_detection::load_model(FACE_MODEL_PATH),
+          "load_model succeeds on the checked-in YuNet model");
 
     // detect_face: a plain, featureless frame has nothing resembling a face
     // in it, so the loaded cascade shouldn't report a false positive.
@@ -93,6 +95,8 @@ int main()
     // when it should be flipped to expect false instead.
     check(any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Dog_happy_nao.mp4"),
           "detect_face false-positives on a dog's face (known Haar-cascade limitation, see README)");
+    check(!any_frame_has_face(std::string(FACE_EXAMPLES_DIR) + "/Dog_happy_nao.mp4"),
+          "detect_face doesn't mistake a dog's face for a human one");
 
     if (failure_count > 0)
     {

@@ -103,40 +103,57 @@ namespace
 
 namespace face_detection
 {
-    bool load_cascade(const std::string& cascade_path)
+
+bool load_model(const std::string& model_path)
+{
+    try
     {
-        cascade_loaded = face_cascade.load(cascade_path);
-        return cascade_loaded;
+        net = cv::dnn::readNetFromONNX(model_path);
+    }
+    catch (const cv::Exception&)
+    {
+        model_loaded = false;
+        return false;
     }
 
-    std::optional<DetectedFace> detect_face(const cv::Mat& bgr_image)
+    model_loaded = !net.empty();
+    return model_loaded;
+}
+
+std::optional<DetectedFace> detect_face(const cv::Mat& bgr_image)
+{
+    if (!model_loaded)
     {
-        if (!cascade_loaded)
-        {
-            return std::nullopt;
-        }
-
-        cv::Mat gray;
-        cv::cvtColor(bgr_image, gray, cv::COLOR_BGR2GRAY);
-        cv::equalizeHist(gray, gray);
-
-        // Blank out the left/right quarters: a face there belongs to whichever
-        // region NAO's neighbour is looking at, not the one it's currently
-        // pointed at.
-        const int left_bound = gray.cols / 4;
-        const int right_bound = 3 * gray.cols / 4;
-        gray(cv::Rect(0, 0, left_bound, gray.rows)).setTo(cv::Scalar(0));
-        gray(cv::Rect(right_bound, 0, gray.cols - right_bound, gray.rows)).setTo(cv::Scalar(0));
-
-        std::vector<cv::Rect> faces;
-        face_cascade.detectMultiScale(gray, faces, kScaleFactor, kMinNeighbors, 0 | cv::CASCADE_SCALE_IMAGE, kMinFaceSize);
-
-        if (faces.empty())
-        {
-            return std::nullopt;
-        }
-
-        return DetectedFace{faces[0]};
+        return std::nullopt;
     }
+
+    // Blank out the left/right quarters: a face there belongs to whichever
+    // region NAO's neighbour is looking at, not the one it's currently
+    // pointed at.
+    cv::Mat cropped = bgr_image.clone();
+    const int left_bound = cropped.cols / 4;
+    const int right_bound = 3 * cropped.cols / 4;
+    cropped(cv::Rect(0, 0, left_bound, cropped.rows)).setTo(cv::Scalar(0, 0, 0));
+    cropped(cv::Rect(right_bound, 0, cropped.cols - right_bound, cropped.rows)).setTo(cv::Scalar(0, 0, 0));
+
+    const cv::Mat padded = pad_to_divisor(cropped);
+
+    static const std::vector<std::string> kOutputNames = {
+        "cls_8", "cls_16", "cls_32", "obj_8", "obj_16", "obj_32",
+        "bbox_8", "bbox_16", "bbox_32", "kps_8", "kps_16", "kps_32"};
+
+    net.setInput(cv::dnn::blobFromImage(padded));
+
+    std::vector<cv::Mat> output_blobs;
+    net.forward(output_blobs, kOutputNames);
+
+    const auto bounds = decode_best_face(output_blobs, padded.cols, padded.rows);
+    if (!bounds)
+    {
+        return std::nullopt;
+    }
+
+    return DetectedFace{*bounds};
+}
 
 }
