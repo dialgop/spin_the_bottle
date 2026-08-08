@@ -1,0 +1,45 @@
+<?xml version="1.0" ?>
+<robot name="Nao Webots">
+    <webots>
+        <plugin type="webots_ros2_control::Ros2Control" />
+    </webots>
+
+    <!-- NAO's HeadYaw/HeadPitch are a single Hinge2Joint in the Nao proto, which
+         Webots can't export to URDF, so this chain is hand-written rather than
+         derived from the proto. ros2_control's parser requires real <joint>
+         elements matching the <ros2_control> block below, but the Webots-side
+         plugin binds to devices by name, so the geometry here doesn't need to
+         be physically exact - only the joint limits are NAO's real ones. -->
+    <link name="base_link"/>
+    <link name="neck_link"/>
+    <link name="head_link"/>
+
+    <joint name="HeadYaw" type="revolute">
+        <parent link="base_link"/>
+        <child link="neck_link"/>
+        <axis xyz="0 0 1"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <limit lower="-2.0857" upper="2.0857" effort="1.0" velocity="1.0"/>
+    </joint>
+    <joint name="HeadPitch" type="revolute">
+        <parent link="neck_link"/>
+        <child link="head_link"/>
+        <axis xyz="0 1 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <limit lower="-0.6720" upper="0.5149" effort="1.0" velocity="1.0"/>
+    </joint>
+
+    <ros2_control name="WebotsControl" type="system">
+        <hardware>
+            <plugin>webots_ros2_control::Ros2ControlSystem</plugin>
+        </hardware>
+        <joint name="HeadYaw">
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+        </joint>
+        <joint name="HeadPitch">
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+        </joint>
+    </ros2_control>
+</robot>
