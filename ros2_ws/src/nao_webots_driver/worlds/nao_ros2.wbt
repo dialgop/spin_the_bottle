@@ -1,0 +1,67 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/softbank/nao/protos/Nao.proto"
+
+WorldInfo {
+  info [
+    "Aldebaran's Nao H25 V5.0"
+    "Alpha scope: NAO gets its \"vision\" from recorded video files, not a simulated camera."
+    "This world only exercises body movement (head, later arm), so it drops the textured"
+    "background/floor protos and camera rendering to stay light on WSL2/WSLg."
+  ]
+  title "Aldebaran's Nao - ROS2 alpha (body movement only)"
+  basicTimeStep 20
+  FPS 20
+  contactProperties [
+    ContactProperties {
+      material1 "NAO foot material"
+      coulombFriction [
+        7
+      ]
+      bounce 0.3
+      bounceVelocity 0.003
+    }
+  ]
+}
+Viewpoint {
+  orientation 0.11004914683657648 0.04798567379584391 -0.9927671229401689 2.3245067278144345
+  position 1.096078850513378 1.2204553552091344 0.6497795716524872
+  follow "NAO"
+}
+Background {
+  skyColor [
+    0.8 0.85 0.9
+  ]
+}
+DirectionalLight {
+  direction 0.3 -0.3 -0.6
+  intensity 1.5
+  castShadows FALSE
+}
+Solid {
+  translation 0 0 0
+  rotation 1 0 0 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.6 0.6 0.6
+        roughness 1
+        metalness 0
+      }
+      geometry Plane {
+        size 25 25
+      }
+    }
+  ]
+  name "floor"
+  boundingObject Plane {
+    size 25 25
+  }
+}
+Nao {
+  rotation 0 0 1 1.57079632679
+  controller "<extern>"
+  controllerArgs [
+    ""
+  ]
+}
