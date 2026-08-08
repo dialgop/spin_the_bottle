@@ -1,3 +1,13 @@
+// Decides where NAO should point its head: runs vision_standalone's
+// bottle-pointing pipeline against a recorded video, and once the bottle
+// settles, publishes the resulting head pose as a JointTrajectory for
+// nao_webots_driver's head_controller to execute.
+//
+// Vision comes from recorded footage rather than a live/simulated camera,
+// same as vision_standalone itself - see ros2_ws/src/nao_webots_driver for
+// why there's no simulated camera yet. face_detection isn't wired in here:
+// it needs a frame of what NAO would see after turning its head, which
+// doesn't exist until there's a camera feed.
 #include "line_projection.h"
 #include "pre_game.h"
 #include "world_coordinates.h"
@@ -15,6 +25,12 @@ using namespace std::chrono_literals;
 
 namespace
 {
+    // Steps through video_path frame by frame until the bottle transitions
+    // from moving to settled (mirrors vision_standalone/src/main.cpp's
+    // per-frame pipeline), then returns the head pose that settle frame
+    // points to. Returns std::nullopt if the video can't be opened, the
+    // bottle never settles, or the settled frame doesn't yield a usable
+    // target - callers only need to know whether there's somewhere to look.
     std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
                                                                        const rclcpp::Logger& logger)
     {
