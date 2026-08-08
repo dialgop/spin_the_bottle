@@ -2,7 +2,7 @@
 
 A ROS package that makes an [Aldebaran/SoftBank NAO](https://en.wikipedia.org/wiki/Nao_(robot)) robot referee a game of spin-the-bottle: it watches a real bottle with its camera, works out where it's pointing once it stops spinning, turns its head to look at that spot, and asks whoever it sees to take their turn.
 
-Originally built by **Diego Alejandro Gómez Pardo** in 2015 as a project for the Humanoid Robotics Praktikum at the University of Bonn. That original ROS (Indigo) / OpenCV package is archived on the [`nao-2015`](../../tree/nao-2015) branch, including the project report. This repo is now a personal, ongoing rework of that project: `vision_standalone/` is a from-scratch, ROS-free reimplementation of the vision pipeline, started in 2026, that ports the working ideas from the 2015 code into modern C++17/CMake so they can be developed and tested without a robot or a ROS install.
+Originally built by **Diego Alejandro Gómez Pardo** in 2015 as a project for the Humanoid Robotics Praktikum at the University of Bonn. That original ROS (Indigo) / OpenCV package is archived on the [`nao-2015`](../../tree/nao-2015) branch, including the project report. This repo is now a personal, ongoing rework of that project: `vision_standalone/` is a from-scratch, ROS-free reimplementation of the vision pipeline, started in 2026, that ports the working ideas from the 2015 code into modern C++17/CMake so they can be developed and tested without a robot or a ROS install. `ros2_ws/` is a separate, newer piece of that rework: a ROS 2 package that drives a simulated NAO in [Webots](https://cyberbotics.com/), since neither a physical NAO nor a ROS/ROS 2-enabled one is available.
 
 ## The game
 
@@ -55,7 +55,20 @@ The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHig
 
 ### Future work
 
-1. **Re-integrate with ROS** — now that `pre_game`, `line_projection`, `world_coordinates` and `face_detection` are all ported and tested standalone, wire them back into a ROS node (or a newer ROS 2 / non-ROS control layer) that talks to NAO.
+1. **Re-integrate with ROS** — started in `ros2_ws/` below: NAO's head movement is driven through ROS 2, but `pre_game`, `line_projection`, `world_coordinates` and `face_detection` aren't wired into it yet.
+
+## Ongoing and future work: `ros2_ws/`
+
+`ros2_ws/src/nao_webots_driver/` is a ROS 2 (Jazzy) package that drives a simulated NAO in Webots, standing in for the physical robot the 2015 project needed. Scope is deliberately staged, starting with body movement only:
+
+- **Alpha (done)**: no simulated camera — NAO's "vision" is `vision_standalone`'s recorded footage (see above), not a Webots camera feed, which keeps the simulation light. `HeadYaw`/`HeadPitch` are driven through `ros2_control` (a `joint_trajectory_controller`), confirmed working end-to-end against a `nao_ros2.wbt` world (adapted from Webots' `nao_demo`, with NAO's controller set to `<extern>`).
+- NAO's head/shoulder joints are modeled in Webots' `Nao.proto` as `Hinge2Joint` (2 degrees of freedom in one joint), which Webots can't auto-export to URDF. `resource/nao_webots.urdf` is therefore a hand-written joint chain (using NAO's real joint limits) published via a plain `robot_state_publisher` node, rather than relying on Webots' auto-export.
+
+### Future work
+
+1. Wire `vision_standalone`'s pipeline in to decide where to point, using the same recorded-footage approach rather than a simulated camera.
+2. Point NAO's arm at whoever the bottle lands on, in addition to the head turn.
+3. Extend `ros2_control` to more joints as needed.
 
 ## Repository layout
 
@@ -68,4 +81,10 @@ vision_standalone/                    ROS-free modern rework (2026-)
 │   ├── bottle_examples/              real recorded bottle-spin videos, for use with ./vision_standalone path/to.mp4
 │   └── faces_examples/               real face/dog/background videos, used by face_detection_tests
 └── CMakeLists.txt
+
+ros2_ws/                              ROS 2 (Jazzy) + Webots rework (2026-)
+└── src/nao_webots_driver/            drives a simulated NAO's head via ros2_control
+    ├── launch/robot_launch.py        launches Webots + the ros2_control bridge
+    ├── resource/                     nao_webots.urdf, ros2_control.yml
+    └── worlds/nao_ros2.wbt           Webots world (NAO set to an <extern> controller)
 ```
