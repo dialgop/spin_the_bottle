@@ -15,8 +15,8 @@ using namespace std::chrono_literals;
 
 namespace
 {
-    std::optional<world_coordinates::HeadPose> find_settled_head_pose(std::string& video_path,
-                                                                       rclcpp::Logger& logger)
+    std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
+                                                                       const rclcpp::Logger& logger)
     {
         cv::VideoCapture capture(video_path);
         if (!capture.isOpened())
@@ -65,4 +65,54 @@ namespace
         RCLCPP_WARN(logger, "bottle never settled in %d frame(s) from %s", frame_index, video_path.c_str());
         return std::nullopt;
     }
+}
+
+class RefereeNode : public rclcpp::Node
+{
+public:
+    RefereeNode() : rclcpp::Node("referee_node")
+    {
+        declare_parameter<std::string>("bottle_video_path", DEFAULT_BOTTLE_VIDEO_PATH);
+
+        publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/head_controller/joint_trajectory", 10);
+
+        // Give head_controller a moment to come up before publishing.
+        timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_once, this));
+    }
+
+private:
+    void run_once()
+    {
+        timer_->cancel();
+
+        const std::string video_path = get_parameter("bottle_video_path").as_string();
+        const auto pose = find_settled_head_pose(video_path, get_logger());
+        if (!pose)
+        {
+            RCLCPP_WARN(get_logger(), "no head pose to publish - ask for the bottle to be spun again");
+            return;
+        }
+
+        trajectory_msgs::msg::JointTrajectory message;
+        message.joint_names = {"HeadYaw", "HeadPitch"};
+
+        trajectory_msgs::msg::JointTrajectoryPoint point;
+        point.positions = {pose->yaw_radians, pose->pitch_radians};
+        point.time_from_start = rclcpp::Duration::from_seconds(2.0);
+        message.points.push_back(point);
+
+        RCLCPP_INFO(get_logger(), "publishing head pose: yaw=%f pitch=%f", pose->yaw_radians, pose->pitch_radians);
+        publisher_->publish(message);
+    }
+
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
+};
+
+int main(int argc, char** argv)
+{
+    rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<RefereeNode>());
+    rclcpp::shutdown();
+    return 0;
 }
