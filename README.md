@@ -68,6 +68,10 @@ The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHig
 
 1. Swap the recorded-video face check for a real or simulated camera feed of what NAO would actually see after turning its head - deliberately deferred so far, since a simulated camera reintroduces GPU-rendering load this project has otherwise avoided to stay stable on WSL2/WSLg.
 
+### Known limitation: no NAO speech
+
+There's no way for the simulated NAO to actually speak. Webots' `Nao.proto` doesn't define a Speaker device at all, so unlike the camera/joints there's nothing here for even a custom `webots_ros2_driver` plugin to control - it's not a missing-integration problem, the simulated hardware itself doesn't exist. Any "NAO says X" behavior would have to be text-only (e.g. a logged/published phrase) or a real TTS engine speaking on the host machine, entirely separate from the Webots simulation.
+
 ## Repository layout
 
 ```
