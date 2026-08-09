@@ -31,26 +31,49 @@ namespace
 {
     // Points whichever arm is on the same side as the head turn (positive
     // yaw = left, matching HeadPose's convention), by swinging that
-    // shoulder outward proportionally to how far round the head turned. Not
+    // shoulder outward proportionally to how far round the head turned, and
+    // straightening its elbow; the other arm stays at a resting bend. Not
     // derived from vision_standalone - this is robot-arm kinematics, not
     // vision, so it lives here rather than in the vision pipeline.
+    //
+    // NAO's elbow roll range never includes 0 on either side (left is
+    // always negative, right always positive), unlike shoulder roll, so the
+    // resting arm needs a real resting bend rather than a plain 0.0.
     struct ArmPose
     {
         bool use_left_arm;
-        double shoulder_pitch_radians;
-        double shoulder_roll_radians;
+        double l_shoulder_pitch_radians;
+        double l_shoulder_roll_radians;
+        double l_elbow_yaw_radians;
+        double l_elbow_roll_radians;
+        double r_shoulder_pitch_radians;
+        double r_shoulder_roll_radians;
+        double r_elbow_yaw_radians;
+        double r_elbow_roll_radians;
     };
 
     ArmPose compute_arm_pose(double head_yaw_radians)
     {
-        constexpr double kShoulderPitch = -0.3;  // raises the arm from resting (0 = horizontal forward)
-        constexpr double kMaxShoulderRoll = 1.0; // stays inside NAO's real ~1.33 rad shoulder-roll range
+        constexpr double kPointingShoulderPitch = -0.3; // raises the arm from resting (0 = horizontal forward)
+        constexpr double kMaxShoulderRoll = 1.0;        // stays inside NAO's real ~1.33 rad shoulder-roll range
+        constexpr double kPointingElbowRoll = 0.2;      // near-straight, extended for pointing
+        constexpr double kRestingElbowRoll = 0.8;       // natural bend at rest
 
         const bool use_left_arm = head_yaw_radians >= 0.0;
         const double roll_magnitude = std::min(std::abs(head_yaw_radians), kMaxShoulderRoll);
-        const double shoulder_roll = use_left_arm ? roll_magnitude : -roll_magnitude;
 
-        return ArmPose{use_left_arm, kShoulderPitch, shoulder_roll};
+        ArmPose pose{};
+        pose.use_left_arm = use_left_arm;
+        pose.l_shoulder_pitch_radians = use_left_arm ? kPointingShoulderPitch : 0.0;
+        pose.l_shoulder_roll_radians = use_left_arm ? roll_magnitude : 0.0;
+        pose.l_elbow_yaw_radians = 0.0;
+        pose.l_elbow_roll_radians = use_left_arm ? -kPointingElbowRoll : -kRestingElbowRoll;
+        pose.r_shoulder_pitch_radians = use_left_arm ? 0.0 : kPointingShoulderPitch;
+        pose.r_shoulder_roll_radians = use_left_arm ? 0.0 : -roll_magnitude;
+        pose.r_elbow_yaw_radians = 0.0;
+        pose.r_elbow_roll_radians = use_left_arm ? kRestingElbowRoll : kPointingElbowRoll;
+
+        return pose;
     }
     // Steps through video_path frame by frame until the bottle transitions
     // from moving to settled (mirrors vision_standalone/src/main.cpp's
@@ -174,18 +197,18 @@ private:
         const ArmPose arm_pose = compute_arm_pose(pose->yaw_radians);
 
         trajectory_msgs::msg::JointTrajectory arm_message;
-        arm_message.joint_names = {"LShoulderPitch", "LShoulderRoll", "RShoulderPitch", "RShoulderRoll"};
+        arm_message.joint_names = {"LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll",
+                                    "RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll"};
 
         trajectory_msgs::msg::JointTrajectoryPoint arm_point;
-        arm_point.positions = arm_pose.use_left_arm
-            ? std::vector<double>{arm_pose.shoulder_pitch_radians, arm_pose.shoulder_roll_radians, 0.0, 0.0}
-            : std::vector<double>{0.0, 0.0, arm_pose.shoulder_pitch_radians, arm_pose.shoulder_roll_radians};
+        arm_point.positions = {arm_pose.l_shoulder_pitch_radians, arm_pose.l_shoulder_roll_radians,
+                                arm_pose.l_elbow_yaw_radians, arm_pose.l_elbow_roll_radians,
+                                arm_pose.r_shoulder_pitch_radians, arm_pose.r_shoulder_roll_radians,
+                                arm_pose.r_elbow_yaw_radians, arm_pose.r_elbow_roll_radians};
         arm_point.time_from_start = rclcpp::Duration::from_seconds(2.0);
         arm_message.points.push_back(arm_point);
 
-        RCLCPP_INFO(get_logger(), "publishing arm pose: %s arm, pitch=%f roll=%f",
-                    arm_pose.use_left_arm ? "left" : "right",
-                    arm_pose.shoulder_pitch_radians, arm_pose.shoulder_roll_radians);
+        RCLCPP_INFO(get_logger(), "publishing arm pose: %s arm pointing", arm_pose.use_left_arm ? "left" : "right");
         arm_publisher_->publish(arm_message);
 
         const std::string face_video_path = get_parameter("face_video_path").as_string();
