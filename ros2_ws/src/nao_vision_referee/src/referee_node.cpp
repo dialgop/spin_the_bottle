@@ -84,6 +84,8 @@ namespace
     std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
                                                                        const rclcpp::Logger& logger)
     {
+        constexpr int kSettleStreak = 5;
+
         cv::VideoCapture capture(video_path);
         if (!capture.isOpened())
         {
@@ -92,37 +94,46 @@ namespace
         }
 
         cv::Mat previous_frame, frame;
-        bool was_moving = false;
+        bool seen_movement = false;
+        int still_streak = 0;
         int frame_index = 0;
         while (capture.read(frame))
         {
             if (!previous_frame.empty())
             {
                 const bool moving = pre_game::movement_detected(frame, previous_frame);
-                if (was_moving && !moving)
+                if (moving)
                 {
-                    RCLCPP_INFO(logger, "bottle settled at frame %d", frame_index);
-
-                    const line_projection::PointingArea area = line_projection::find_pointing_area(frame);
-                    const auto line = line_projection::compute_pointing_line(frame, area);
-                    if (!line)
-                    {
-                        RCLCPP_WARN(logger, "settled frame has no fittable bottle silhouette");
-                        return std::nullopt;
-                    }
-
-                    const world_coordinates::WorldPoint world_point =
-                        world_coordinates::to_world_coordinates(line->ellipse.center, line->angle_degrees, frame);
-                    const auto target = world_coordinates::find_target_point(world_point);
-                    if (!target)
-                    {
-                        RCLCPP_WARN(logger, "pointing angle doesn't land on a valid target region");
-                        return std::nullopt;
-                    }
-
-                    return world_coordinates::compute_head_pose(*target);
+                    seen_movement = true;
+                    still_streak = 0;
                 }
-                was_moving = moving;
+                else if (seen_movement)
+                {
+                    ++still_streak;
+                    if (still_streak >= kSettleStreak)
+                    {
+                        RCLCPP_INFO(logger, "bottle settled at frame %d", frame_index);
+
+                        const line_projection::PointingArea area = line_projection::find_pointing_area(frame);
+                        const auto line = line_projection::compute_pointing_line(frame, area);
+                        if (!line)
+                        {
+                            RCLCPP_WARN(logger, "settled frame has no fittable bottle silhouette");
+                            return std::nullopt;
+                        }
+
+                        const world_coordinates::WorldPoint world_point =
+                            world_coordinates::to_world_coordinates(line->ellipse.center, line->angle_degrees, frame);
+                        const auto target = world_coordinates::find_target_point(world_point);
+                        if (!target)
+                        {
+                            RCLCPP_WARN(logger, "pointing angle doesn't land on a valid target region");
+                            return std::nullopt;
+                        }
+
+                        return world_coordinates::compute_head_pose(*target);
+                    }
+                }
             }
             previous_frame = frame.clone();
             ++frame_index;
