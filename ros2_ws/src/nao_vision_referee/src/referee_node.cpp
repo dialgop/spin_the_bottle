@@ -24,6 +24,7 @@
 #include <chrono>
 #include <cmath>
 #include <optional>
+#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -77,6 +78,16 @@ namespace
 
         return pose;
     }
+
+    struct ConfusedArmPose
+    {
+        double shoulder_pitch_radians;
+        double shoulder_roll_magnitude_radians;
+        double elbow_roll_magnitude_radians;
+    };
+
+    constexpr ConfusedArmPose kConfusedArmPose{-0.2, 0.6, 0.3};
+
     // Steps through video_path frame by frame until the bottle has been
     // still for kSettleStreak consecutive frames after genuinely moving
     // (mirrors vision_standalone/src/main.cpp's per-frame pipeline), then
@@ -99,12 +110,17 @@ namespace
             return std::nullopt;
         }
 
+        const double fps = capture.get(cv::CAP_PROP_FPS) > 0.0 ? capture.get(cv::CAP_PROP_FPS) : 30.0;
+        const auto frame_period = std::chrono::duration<double>(1.0 / fps);
+
         cv::Mat previous_frame, frame;
         bool seen_movement = false;
         int still_streak = 0;
         int frame_index = 0;
         while (capture.read(frame))
         {
+            std::this_thread::sleep_for(frame_period);
+
             if (!previous_frame.empty())
             {
                 const bool moving = pre_game::movement_detected(frame, previous_frame);
@@ -192,11 +208,14 @@ private:
     {
         timer_->cancel();
 
+        publish_watching_head();
+
         const std::string video_path = get_parameter("bottle_video_path").as_string();
         const auto pose = find_settled_head_pose(video_path, get_logger());
         if (!pose)
         {
             RCLCPP_WARN(get_logger(), "no head pose to publish - ask for the bottle to be spun again");
+            publish_confused();
             return;
         }
 
@@ -237,6 +256,75 @@ private:
         {
             RCLCPP_INFO(get_logger(), "detect_face -> no one there - ask the group to spin again");
         }
+            publish_confused();
+        }
+    }
+
+    static constexpr double kHeadMoveSeconds = 1.0;
+
+    void publish_watching_head()
+    {
+        constexpr double kBottleWatchPitch = 0.4; // looking down at the bottle on the table
+        publish_head_now(0.0, kBottleWatchPitch);
+        std::this_thread::sleep_for(std::chrono::duration<double>(kHeadMoveSeconds));
+    }
+
+    void publish_head(double yaw_radians, double pitch_radians)
+    {
+        publish_head_now(yaw_radians, pitch_radians);
+    }
+
+    void publish_head_now(double yaw_radians, double pitch_radians)
+    {
+        trajectory_msgs::msg::JointTrajectory message;
+        message.joint_names = {"HeadYaw", "HeadPitch"};
+
+        trajectory_msgs::msg::JointTrajectoryPoint point;
+        point.positions = {yaw_radians, pitch_radians};
+        point.time_from_start = rclcpp::Duration::from_seconds(kHeadMoveSeconds);
+        message.points.push_back(point);
+
+        RCLCPP_INFO(get_logger(), "publishing head pose: yaw=%f pitch=%f", yaw_radians, pitch_radians);
+        head_publisher_->publish(message);
+    }
+
+    void publish_pointing_arm(double head_yaw_radians)
+    {
+        const ArmPose arm_pose = compute_arm_pose(head_yaw_radians);
+
+        trajectory_msgs::msg::JointTrajectory message;
+        message.joint_names = {"LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll",
+                                "RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll"};
+
+        trajectory_msgs::msg::JointTrajectoryPoint point;
+        point.positions = {arm_pose.l_shoulder_pitch_radians, arm_pose.l_shoulder_roll_radians,
+                            arm_pose.l_elbow_yaw_radians, arm_pose.l_elbow_roll_radians,
+                            arm_pose.r_shoulder_pitch_radians, arm_pose.r_shoulder_roll_radians,
+                            arm_pose.r_elbow_yaw_radians, arm_pose.r_elbow_roll_radians};
+        point.time_from_start = rclcpp::Duration::from_seconds(2.0);
+        message.points.push_back(point);
+
+        RCLCPP_INFO(get_logger(), "publishing arm pose: %s arm pointing", arm_pose.use_left_arm ? "left" : "right");
+        arm_publisher_->publish(message);
+    }
+    void publish_confused()
+    {
+        publish_head(0.0, 0.0);
+
+        trajectory_msgs::msg::JointTrajectory message;
+        message.joint_names = {"LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll",
+                                "RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll"};
+
+        trajectory_msgs::msg::JointTrajectoryPoint point;
+        point.positions = {kConfusedArmPose.shoulder_pitch_radians, kConfusedArmPose.shoulder_roll_magnitude_radians,
+                            0.0, -kConfusedArmPose.elbow_roll_magnitude_radians,
+                            kConfusedArmPose.shoulder_pitch_radians, -kConfusedArmPose.shoulder_roll_magnitude_radians,
+                            0.0, kConfusedArmPose.elbow_roll_magnitude_radians};
+        point.time_from_start = rclcpp::Duration::from_seconds(2.0);
+        message.points.push_back(point);
+
+        RCLCPP_INFO(get_logger(), "publishing confused arm pose - opening both arms");
+        arm_publisher_->publish(message);
     }
 
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr head_publisher_;
