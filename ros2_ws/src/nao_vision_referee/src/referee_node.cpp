@@ -20,13 +20,20 @@
 
 #include <opencv2/videoio.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <optional>
 
 using namespace std::chrono_literals;
 
 namespace
 {
+    // Points whichever arm is on the same side as the head turn (positive
+    // yaw = left, matching HeadPose's convention), by swinging that
+    // shoulder outward proportionally to how far round the head turned. Not
+    // derived from vision_standalone - this is robot-arm kinematics, not
+    // vision, so it lives here rather than in the vision pipeline.
     struct ArmPose
     {
         bool use_left_arm;
@@ -153,16 +160,33 @@ private:
             return;
         }
 
-        trajectory_msgs::msg::JointTrajectory message;
-        message.joint_names = {"HeadYaw", "HeadPitch"};
+        trajectory_msgs::msg::JointTrajectory head_message;
+        head_message.joint_names = {"HeadYaw", "HeadPitch"};
 
-        trajectory_msgs::msg::JointTrajectoryPoint point;
-        point.positions = {pose->yaw_radians, pose->pitch_radians};
-        point.time_from_start = rclcpp::Duration::from_seconds(2.0);
-        message.points.push_back(point);
+        trajectory_msgs::msg::JointTrajectoryPoint head_point;
+        head_point.positions = {pose->yaw_radians, pose->pitch_radians};
+        head_point.time_from_start = rclcpp::Duration::from_seconds(2.0);
+        head_message.points.push_back(head_point);
 
         RCLCPP_INFO(get_logger(), "publishing head pose: yaw=%f pitch=%f", pose->yaw_radians, pose->pitch_radians);
-        publisher_->publish(message);
+        head_publisher_->publish(head_message);
+
+        const ArmPose arm_pose = compute_arm_pose(pose->yaw_radians);
+
+        trajectory_msgs::msg::JointTrajectory arm_message;
+        arm_message.joint_names = {"LShoulderPitch", "LShoulderRoll", "RShoulderPitch", "RShoulderRoll"};
+
+        trajectory_msgs::msg::JointTrajectoryPoint arm_point;
+        arm_point.positions = arm_pose.use_left_arm
+            ? std::vector<double>{arm_pose.shoulder_pitch_radians, arm_pose.shoulder_roll_radians, 0.0, 0.0}
+            : std::vector<double>{0.0, 0.0, arm_pose.shoulder_pitch_radians, arm_pose.shoulder_roll_radians};
+        arm_point.time_from_start = rclcpp::Duration::from_seconds(2.0);
+        arm_message.points.push_back(arm_point);
+
+        RCLCPP_INFO(get_logger(), "publishing arm pose: %s arm, pitch=%f roll=%f",
+                    arm_pose.use_left_arm ? "left" : "right",
+                    arm_pose.shoulder_pitch_radians, arm_pose.shoulder_roll_radians);
+        arm_publisher_->publish(arm_message);
 
         const std::string face_video_path = get_parameter("face_video_path").as_string();
         if (video_has_face(face_video_path, get_logger()))
@@ -175,7 +199,8 @@ private:
         }
     }
 
-    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_;
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr head_publisher_;
+    rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr arm_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
 };
 
