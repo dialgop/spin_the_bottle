@@ -27,6 +27,24 @@ using namespace std::chrono_literals;
 
 namespace
 {
+    struct ArmPose
+    {
+        bool use_left_arm;
+        double shoulder_pitch_radians;
+        double shoulder_roll_radians;
+    };
+
+    ArmPose compute_arm_pose(double head_yaw_radians)
+    {
+        constexpr double kShoulderPitch = -0.3;  // raises the arm from resting (0 = horizontal forward)
+        constexpr double kMaxShoulderRoll = 1.0; // stays inside NAO's real ~1.33 rad shoulder-roll range
+
+        const bool use_left_arm = head_yaw_radians >= 0.0;
+        const double roll_magnitude = std::min(std::abs(head_yaw_radians), kMaxShoulderRoll);
+        const double shoulder_roll = use_left_arm ? roll_magnitude : -roll_magnitude;
+
+        return ArmPose{use_left_arm, kShoulderPitch, shoulder_roll};
+    }
     // Steps through video_path frame by frame until the bottle transitions
     // from moving to settled (mirrors vision_standalone/src/main.cpp's
     // per-frame pipeline), then returns the head pose that settle frame
@@ -115,9 +133,10 @@ public:
         declare_parameter<std::string>("bottle_video_path", DEFAULT_BOTTLE_VIDEO_PATH);
         declare_parameter<std::string>("face_video_path", DEFAULT_FACE_VIDEO_PATH);
 
-        publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/head_controller/joint_trajectory", 10);
+        head_publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/head_controller/joint_trajectory", 10);
+        arm_publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/arm_controller/joint_trajectory", 10);
 
-        // Give head_controller a moment to come up before publishing.
+        // Give head_controller/arm_controller a moment to come up before publishing.
         timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_once, this));
     }
 
