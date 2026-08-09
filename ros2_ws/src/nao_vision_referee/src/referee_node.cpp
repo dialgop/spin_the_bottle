@@ -3,11 +3,13 @@
 // settles, publishes the resulting head pose as a JointTrajectory for
 // nao_webots_driver's head_controller to execute.
 //
-// Vision comes from recorded footage rather than a live/simulated camera,
-// same as vision_standalone itself - see ros2_ws/src/nao_webots_driver for
-// why there's no simulated camera yet. face_detection isn't wired in here:
-// it needs a frame of what NAO would see after turning its head, which
-// doesn't exist until there's a camera feed.
+// After publishing the pose, also checks a recorded face video for a face,
+// the same way vision_standalone's face_detection_tests do - a stand-in for
+// what NAO's camera would see after actually turning its head there, since
+// there's no live/simulated camera yet (see ros2_ws/src/nao_webots_driver
+// for why). This is only to test the wiring end-to-end; a real or simulated
+// camera feed is the natural follow-up.
+#include "face_detection.h"
 #include "line_projection.h"
 #include "pre_game.h"
 #include "world_coordinates.h"
@@ -81,6 +83,28 @@ namespace
         RCLCPP_WARN(logger, "bottle never settled in %d frame(s) from %s", frame_index, video_path.c_str());
         return std::nullopt;
     }
+
+    // Scans every frame of video_path for a face, stopping at the first hit.
+    // Mirrors face_detection_tests.cpp's any_frame_has_face helper.
+    bool video_has_face(const std::string& video_path, const rclcpp::Logger& logger)
+    {
+        cv::VideoCapture capture(video_path);
+        if (!capture.isOpened())
+        {
+            RCLCPP_ERROR(logger, "failed to open video: %s", video_path.c_str());
+            return false;
+        }
+
+        cv::Mat frame;
+        while (capture.read(frame))
+        {
+            if (face_detection::detect_face(frame))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 class RefereeNode : public rclcpp::Node
@@ -89,6 +113,7 @@ public:
     RefereeNode() : rclcpp::Node("referee_node")
     {
         declare_parameter<std::string>("bottle_video_path", DEFAULT_BOTTLE_VIDEO_PATH);
+        declare_parameter<std::string>("face_video_path", DEFAULT_FACE_VIDEO_PATH);
 
         publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/head_controller/joint_trajectory", 10);
 
@@ -119,6 +144,16 @@ private:
 
         RCLCPP_INFO(get_logger(), "publishing head pose: yaw=%f pitch=%f", pose->yaw_radians, pose->pitch_radians);
         publisher_->publish(message);
+
+        const std::string face_video_path = get_parameter("face_video_path").as_string();
+        if (video_has_face(face_video_path, get_logger()))
+        {
+            RCLCPP_INFO(get_logger(), "detect_face -> found someone - ask them to spin next");
+        }
+        else
+        {
+            RCLCPP_INFO(get_logger(), "detect_face -> no one there - ask the group to spin again");
+        }
     }
 
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr publisher_;
@@ -128,6 +163,12 @@ private:
 int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
+
+    if (!face_detection::load_model(FACE_MODEL_PATH))
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("referee_node"), "failed to load face model: %s", FACE_MODEL_PATH);
+    }
+
     rclcpp::spin(std::make_shared<RefereeNode>());
     rclcpp::shutdown();
     return 0;

@@ -55,18 +55,18 @@ The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHig
 
 ### Future work
 
-1. **Re-integrate with ROS** — started in `ros2_ws/` below: NAO's head movement and the pointing decision are both driven through ROS 2 now; `face_detection` is the one piece not wired in yet.
+1. **Re-integrate with ROS** — started in `ros2_ws/` below: NAO's head movement and the full pointing/face-check decision are all driven through ROS 2 now, against recorded footage rather than a live/simulated camera.
 
 ## Ongoing and future work: `ros2_ws/`
 
 `ros2_ws/` is a ROS 2 (Jazzy) workspace that drives a simulated NAO in Webots, standing in for the physical robot the 2015 project needed. Scope is deliberately staged, starting with body movement only:
 
 - **`nao_webots_driver`** (done) — no simulated camera; NAO's "vision" is `vision_standalone`'s recorded footage (see above), not a Webots camera feed, which keeps the simulation light. `HeadYaw`/`HeadPitch` are driven through `ros2_control` (a `joint_trajectory_controller`), confirmed working end-to-end against a `nao_ros2.wbt` world (adapted from Webots' `nao_demo`, with NAO's controller set to `<extern>`). NAO's head/shoulder joints are modeled in Webots' `Nao.proto` as `Hinge2Joint` (2 degrees of freedom in one joint), which Webots can't auto-export to URDF, so `resource/nao_webots.urdf` is a hand-written joint chain (using NAO's real joint limits) published via a plain `robot_state_publisher` node, rather than relying on Webots' auto-export.
-- **`nao_vision_referee`** (done) — a `referee_node` that compiles `vision_standalone`'s `pre_game`/`line_projection`/`world_coordinates` sources directly (no duplication) against a recorded bottle-spin video, finds the frame where the bottle settles, and publishes the resulting head pose to `nao_webots_driver`'s `head_controller` — confirmed working end-to-end, moving the simulated NAO's head to match the video's pointing angle. `face_detection` isn't wired in here: it needs a frame of what NAO would see after turning its head, which doesn't exist until there's a camera feed.
+- **`nao_vision_referee`** (done) — a `referee_node` that compiles `vision_standalone`'s `pre_game`/`line_projection`/`world_coordinates`/`face_detection` sources directly (no duplication). It finds the frame where a recorded bottle-spin video settles, publishes the resulting head pose to `nao_webots_driver`'s `head_controller`, then checks a recorded face video for a face and logs the referee's decision ("ask them to spin next" / "ask the group to spin again") — confirmed working end-to-end, including moving the simulated NAO's head to match the video's pointing angle. The face check reads a recorded video rather than a live/simulated camera frame, same as everything else here — it's there to test the ROS 2 wiring, not to be the final input source.
 
 ### Future work
 
-1. Wire in `face_detection` once there's a camera feed (real or simulated) to check for a face after the head turns.
+1. Swap the recorded-video face check for a real or simulated camera feed of what NAO would actually see after turning its head.
 2. Point NAO's arm at whoever the bottle lands on, in addition to the head turn.
 3. Extend `ros2_control` to more joints as needed.
 
@@ -83,8 +83,11 @@ vision_standalone/                    ROS-free modern rework (2026-)
 └── CMakeLists.txt
 
 ros2_ws/                              ROS 2 (Jazzy) + Webots rework (2026-)
-└── src/nao_webots_driver/            drives a simulated NAO's head via ros2_control
-    ├── launch/robot_launch.py        launches Webots + the ros2_control bridge
-    ├── resource/                     nao_webots.urdf, ros2_control.yml
-    └── worlds/nao_ros2.wbt           Webots world (NAO set to an <extern> controller)
+└── src/
+    ├── nao_webots_driver/            drives a simulated NAO's head via ros2_control
+    │   ├── launch/robot_launch.py    launches Webots + the ros2_control bridge
+    │   ├── resource/                 nao_webots.urdf, ros2_control.yml
+    │   └── worlds/nao_ros2.wbt       Webots world (NAO set to an <extern> controller)
+    └── nao_vision_referee/           decides where NAO should point + whether it sees a face
+        └── src/referee_node.cpp      compiles vision_standalone's sources in directly
 ```
