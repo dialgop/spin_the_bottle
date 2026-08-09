@@ -32,9 +32,10 @@ namespace
     // Points whichever arm is on the same side as the head turn (positive
     // yaw = left, matching HeadPose's convention), by swinging that
     // shoulder outward proportionally to how far round the head turned, and
-    // straightening its elbow; the other arm stays at a resting bend. Not
-    // derived from vision_standalone - this is robot-arm kinematics, not
-    // vision, so it lives here rather than in the vision pipeline.
+    // straightening its elbow; the other arm hangs down at the side, like a
+    // normal standing pose, rather than held out in front. Not derived from
+    // vision_standalone - this is robot-arm kinematics, not vision, so it
+    // lives here rather than in the vision pipeline.
     //
     // NAO's elbow roll range never includes 0 on either side (left is
     // always negative, right always positive), unlike shoulder roll, so the
@@ -55,32 +56,37 @@ namespace
     ArmPose compute_arm_pose(double head_yaw_radians)
     {
         constexpr double kPointingShoulderPitch = -0.3; // raises the arm from resting (0 = horizontal forward)
+        constexpr double kRestingShoulderPitch = 1.5;   // arm down at the side, like a normal standing pose
         constexpr double kMaxShoulderRoll = 1.0;        // stays inside NAO's real ~1.33 rad shoulder-roll range
         constexpr double kPointingElbowRoll = 0.2;      // near-straight, extended for pointing
-        constexpr double kRestingElbowRoll = 0.8;       // natural bend at rest
+        constexpr double kRestingElbowRoll = 0.3;       // gentle bend, arm relaxed at the side
 
         const bool use_left_arm = head_yaw_radians >= 0.0;
         const double roll_magnitude = std::min(std::abs(head_yaw_radians), kMaxShoulderRoll);
 
         ArmPose pose{};
         pose.use_left_arm = use_left_arm;
-        pose.l_shoulder_pitch_radians = use_left_arm ? kPointingShoulderPitch : 0.0;
+        pose.l_shoulder_pitch_radians = use_left_arm ? kPointingShoulderPitch : kRestingShoulderPitch;
         pose.l_shoulder_roll_radians = use_left_arm ? roll_magnitude : 0.0;
         pose.l_elbow_yaw_radians = 0.0;
         pose.l_elbow_roll_radians = use_left_arm ? -kPointingElbowRoll : -kRestingElbowRoll;
-        pose.r_shoulder_pitch_radians = use_left_arm ? 0.0 : kPointingShoulderPitch;
+        pose.r_shoulder_pitch_radians = use_left_arm ? kRestingShoulderPitch : kPointingShoulderPitch;
         pose.r_shoulder_roll_radians = use_left_arm ? 0.0 : -roll_magnitude;
         pose.r_elbow_yaw_radians = 0.0;
         pose.r_elbow_roll_radians = use_left_arm ? kRestingElbowRoll : kPointingElbowRoll;
 
         return pose;
     }
-    // Steps through video_path frame by frame until the bottle transitions
-    // from moving to settled (mirrors vision_standalone/src/main.cpp's
-    // per-frame pipeline), then returns the head pose that settle frame
-    // points to. Returns std::nullopt if the video can't be opened, the
-    // bottle never settles, or the settled frame doesn't yield a usable
-    // target - callers only need to know whether there's somewhere to look.
+    // Steps through video_path frame by frame until the bottle has been
+    // still for kSettleStreak consecutive frames after genuinely moving
+    // (mirrors vision_standalone/src/main.cpp's per-frame pipeline), then
+    // returns the head pose the latest frame points to. A real hand-spun
+    // bottle can pause for a single frame mid-spin - requiring a streak
+    // instead of just one still frame avoids grabbing that false stop
+    // instead of where it actually ends up. Returns std::nullopt if the
+    // video can't be opened, the bottle never settles, or the settled frame
+    // doesn't yield a usable target - callers only need to know whether
+    // there's somewhere to look.
     std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
                                                                        const rclcpp::Logger& logger)
     {

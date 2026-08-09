@@ -12,7 +12,7 @@ find_package(OpenCV 4 REQUIRED)
 # vision_standalone isn't a ROS package - its sources are compiled straight
 # into this node rather than duplicated, so there's one copy of the pipeline.
 set(VISION_STANDALONE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../vision_standalone")
-set(DEFAULT_BOTTLE_VIDEO_PATH "${VISION_STANDALONE_DIR}/data/bottle_examples/1000275431_nao.mp4")
+set(DEFAULT_BOTTLE_VIDEO_PATH "${VISION_STANDALONE_DIR}/data/bottle_examples/right_bottle_nao.mp4")
 set(DEFAULT_FACE_VIDEO_PATH "${VISION_STANDALONE_DIR}/data/faces_examples/Man_surprised_nao.mp4")
 set(FACE_MODEL_PATH "${VISION_STANDALONE_DIR}/data/face_detection_yunet_2023mar.onnx")
 
