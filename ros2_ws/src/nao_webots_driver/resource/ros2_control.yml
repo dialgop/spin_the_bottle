@@ -8,11 +8,26 @@ controller_manager:
     head_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
 head_controller:
   ros__parameters:
     joints:
       - HeadYaw
       - HeadPitch
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - LShoulderPitch
+      - LShoulderRoll
+      - RShoulderPitch
+      - RShoulderRoll
     command_interfaces:
       - position
     state_interfaces:

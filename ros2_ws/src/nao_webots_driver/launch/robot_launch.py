@@ -3,9 +3,10 @@
 """Launch Webots NAO ROS2 driver - alpha scope (body movement only).
 
 NAO's "vision" comes from recorded video files (see vision_standalone), not a
-simulated camera, so this world/URDF has no camera device. Webots only drives
-the head joints (HeadYaw/HeadPitch) through ros2_control; arm pointing and any
-camera bridge are follow-ups once this is confirmed working.
+simulated camera, so this world/URDF has no camera device. Webots drives the
+head (HeadYaw/HeadPitch) and both shoulders (LShoulderPitch/LShoulderRoll,
+RShoulderPitch/RShoulderRoll) through ros2_control; a camera bridge is a
+follow-up once this is confirmed working.
 
 Patches webots_ros2_driver's is_wsl() detection before importing
 WebotsLauncher: is_wsl() unconditionally assumes Webots is a Windows install
@@ -77,12 +78,18 @@ def generate_launch_description():
         output='screen',
         arguments=['head_controller'] + controller_manager_timeout,
     )
+    arm_controller_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        output='screen',
+        arguments=['arm_controller'] + controller_manager_timeout,
+    )
 
     # Controller spawners need the driver's ros2_control plugin to be up
     # first, so they're started once WebotsController reports it connected.
     waiting_nodes = WaitForControllerConnection(
         target_driver=nao_driver,
-        nodes_to_start=[joint_state_broadcaster_spawner, head_controller_spawner],
+        nodes_to_start=[joint_state_broadcaster_spawner, head_controller_spawner, arm_controller_spawner],
     )
 
     return LaunchDescription([
