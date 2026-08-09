@@ -65,6 +65,43 @@
         <limit lower="-1.3265" upper="0.3142" effort="1.0" velocity="1.0"/>
     </joint>
 
+    <!-- Elbows are simple single-DOF HingeJoints in the proto (not
+         Hinge2Joint like the head/shoulders), but kept hand-written here too
+         for consistency with the rest of this chain. -->
+    <link name="l_elbow_link"/>
+    <link name="l_forearm_link"/>
+    <link name="r_elbow_link"/>
+    <link name="r_forearm_link"/>
+
+    <joint name="LElbowYaw" type="revolute">
+        <parent link="l_upper_arm_link"/>
+        <child link="l_elbow_link"/>
+        <axis xyz="0 1 0"/>
+        <origin xyz="0 0.1 0" rpy="0 0 0"/>
+        <limit lower="-2.0857" upper="2.0857" effort="1.0" velocity="1.0"/>
+    </joint>
+    <joint name="LElbowRoll" type="revolute">
+        <parent link="l_elbow_link"/>
+        <child link="l_forearm_link"/>
+        <axis xyz="1 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <limit lower="-1.5446" upper="-0.0349" effort="1.0" velocity="1.0"/>
+    </joint>
+    <joint name="RElbowYaw" type="revolute">
+        <parent link="r_upper_arm_link"/>
+        <child link="r_elbow_link"/>
+        <axis xyz="0 1 0"/>
+        <origin xyz="0 -0.1 0" rpy="0 0 0"/>
+        <limit lower="-2.0857" upper="2.0857" effort="1.0" velocity="1.0"/>
+    </joint>
+    <joint name="RElbowRoll" type="revolute">
+        <parent link="r_elbow_link"/>
+        <child link="r_forearm_link"/>
+        <axis xyz="1 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <limit lower="0.0349" upper="1.5446" effort="1.0" velocity="1.0"/>
+    </joint>
+
     <ros2_control name="WebotsControl" type="system">
         <hardware>
             <plugin>webots_ros2_control::Ros2ControlSystem</plugin>
@@ -90,6 +127,22 @@
             <state_interface name="position"/>
         </joint>
         <joint name="RShoulderRoll">
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+        </joint>
+        <joint name="LElbowYaw">
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+        </joint>
+        <joint name="LElbowRoll">
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+        </joint>
+        <joint name="RElbowYaw">
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+        </joint>
+        <joint name="RElbowRoll">
             <command_interface name="position"/>
             <state_interface name="position"/>
         </joint>

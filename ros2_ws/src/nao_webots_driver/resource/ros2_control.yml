@@ -26,8 +26,12 @@ arm_controller:
     joints:
       - LShoulderPitch
       - LShoulderRoll
+      - LElbowYaw
+      - LElbowRoll
       - RShoulderPitch
       - RShoulderRoll
+      - RElbowYaw
+      - RElbowRoll
     command_interfaces:
       - position
     state_interfaces:
