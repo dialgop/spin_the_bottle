@@ -79,6 +79,11 @@ namespace
         return pose;
     }
 
+    // "Confused, please spin again" gesture: both arms raised and opened
+    // outward symmetrically, unlike compute_arm_pose's one-points/one-rests
+    // shape. Used when there's nowhere to point (no valid target, or no
+    // face found there) - not derived from vision_standalone, same as
+    // compute_arm_pose.
     struct ConfusedArmPose
     {
         double shoulder_pitch_radians;
@@ -98,6 +103,11 @@ namespace
     // video can't be opened, the bottle never settles, or the settled frame
     // doesn't yield a usable target - callers only need to know whether
     // there's somewhere to look.
+    //
+    // Frame reads are paced to the video's own frame rate, so this call
+    // blocks for as long as the bottle actually took to settle in the
+    // recording - a real robot watching a live feed couldn't know that
+    // duration in advance either, so this doesn't precompute or fake it.
     std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
                                                                        const rclcpp::Logger& logger)
     {
@@ -219,33 +229,12 @@ private:
             return;
         }
 
-        trajectory_msgs::msg::JointTrajectory head_message;
-        head_message.joint_names = {"HeadYaw", "HeadPitch"};
-
-        trajectory_msgs::msg::JointTrajectoryPoint head_point;
-        head_point.positions = {pose->yaw_radians, pose->pitch_radians};
-        head_point.time_from_start = rclcpp::Duration::from_seconds(2.0);
-        head_message.points.push_back(head_point);
-
-        RCLCPP_INFO(get_logger(), "publishing head pose: yaw=%f pitch=%f", pose->yaw_radians, pose->pitch_radians);
-        head_publisher_->publish(head_message);
-
-        const ArmPose arm_pose = compute_arm_pose(pose->yaw_radians);
-
-        trajectory_msgs::msg::JointTrajectory arm_message;
-        arm_message.joint_names = {"LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll",
-                                    "RShoulderPitch", "RShoulderRoll", "RElbowYaw", "RElbowRoll"};
-
-        trajectory_msgs::msg::JointTrajectoryPoint arm_point;
-        arm_point.positions = {arm_pose.l_shoulder_pitch_radians, arm_pose.l_shoulder_roll_radians,
-                                arm_pose.l_elbow_yaw_radians, arm_pose.l_elbow_roll_radians,
-                                arm_pose.r_shoulder_pitch_radians, arm_pose.r_shoulder_roll_radians,
-                                arm_pose.r_elbow_yaw_radians, arm_pose.r_elbow_roll_radians};
-        arm_point.time_from_start = rclcpp::Duration::from_seconds(2.0);
-        arm_message.points.push_back(arm_point);
-
-        RCLCPP_INFO(get_logger(), "publishing arm pose: %s arm pointing", arm_pose.use_left_arm ? "left" : "right");
-        arm_publisher_->publish(arm_message);
+        // Straight-ahead final pitch, not vision_standalone's real
+        // HeadPose::pitch_radians: that value is calibrated for aiming a
+        // real camera at seated-height faces, which doesn't apply yet (no
+        // camera), and reads as a nod combined with the yaw turn.
+        publish_head(pose->yaw_radians, 0.0);
+        publish_pointing_arm(pose->yaw_radians);
 
         const std::string face_video_path = get_parameter("face_video_path").as_string();
         if (video_has_face(face_video_path, get_logger()))
@@ -255,13 +244,20 @@ private:
         else
         {
             RCLCPP_INFO(get_logger(), "detect_face -> no one there - ask the group to spin again");
-        }
             publish_confused();
         }
     }
 
+    // How long a publish_head_now trajectory point takes to physically
+    // arrive. publish_watching_head blocks for this long afterwards, so the
+    // head is actually down before find_settled_head_pose starts watching -
+    // otherwise the video-watching phase would start while the head motor
+    // is still mid-motion instead of strictly after it's in position.
     static constexpr double kHeadMoveSeconds = 1.0;
 
+    // Looks down at the bottle and waits for that motion to actually
+    // finish, so find_settled_head_pose's real-time watching phase starts
+    // strictly after the head is in position, not concurrently with it.
     void publish_watching_head()
     {
         constexpr double kBottleWatchPitch = 0.4; // looking down at the bottle on the table
@@ -269,6 +265,8 @@ private:
         std::this_thread::sleep_for(std::chrono::duration<double>(kHeadMoveSeconds));
     }
 
+    // Lifts back to normal while turning to (yaw_radians, pitch_radians),
+    // once find_settled_head_pose has actually finished watching.
     void publish_head(double yaw_radians, double pitch_radians)
     {
         publish_head_now(yaw_radians, pitch_radians);
@@ -307,6 +305,9 @@ private:
         RCLCPP_INFO(get_logger(), "publishing arm pose: %s arm pointing", arm_pose.use_left_arm ? "left" : "right");
         arm_publisher_->publish(message);
     }
+
+    // Resets to a neutral head and opens both arms, for "nowhere to point" -
+    // either no valid target at all, or a valid target with no face there.
     void publish_confused()
     {
         publish_head(0.0, 0.0);
