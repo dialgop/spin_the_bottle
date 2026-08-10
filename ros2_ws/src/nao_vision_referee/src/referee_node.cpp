@@ -1,14 +1,16 @@
-// Decides where NAO should point its head: runs vision_standalone's
-// bottle-pointing pipeline against a recorded video, and once the bottle
-// settles, publishes the resulting head pose as a JointTrajectory for
+// Simulates a few rounds of the game: each round, NAO looks down, watches a
+// randomly picked recorded bottle-spin video in real time, and once the
+// bottle settles, publishes the resulting head pose as a JointTrajectory for
 // nao_webots_driver's head_controller to execute.
 //
-// After publishing the pose, also checks a recorded face video for a face,
-// the same way vision_standalone's face_detection_tests do - a stand-in for
-// what NAO's camera would see after actually turning its head there, since
-// there's no live/simulated camera yet (see ros2_ws/src/nao_webots_driver
-// for why). This is only to test the wiring end-to-end; a real or simulated
-// camera feed is the natural follow-up.
+// If that lands on a valid target, also checks a randomly picked recorded
+// face video for a face, the same way vision_standalone's
+// face_detection_tests do - a stand-in for what NAO's camera would see after
+// actually turning its head there, since there's no live/simulated camera
+// yet (see ros2_ws/src/nao_webots_driver for why). This is only to test the
+// wiring end-to-end; a real or simulated camera feed is the natural
+// follow-up. Either way (no valid target, or no face found), NAO resets to
+// a neutral "confused" pose instead.
 #include "face_detection.h"
 #include "line_projection.h"
 #include "pre_game.h"
@@ -33,11 +35,15 @@ using namespace std::chrono_literals;
 
 namespace
 {
+    // One video per bottle-example recording - covers all 6, so a round can
+    // land anywhere from a clean hit to the 225-315 degree dead zone.
     const std::vector<std::string> kBottleVideoNames = {
         "left_bottle_nao.mp4",  "left_down_bottle_nao.mp4",  "left_up_bottle_nao.mp4",
         "right_bottle_nao.mp4", "right_down_bottle_nao.mp4", "right_up_bottle_nao.mp4",
     };
 
+    // One real person, one dog, one empty background - so a round with a
+    // valid target still sometimes comes up "no one there".
     const std::vector<std::string> kFaceVideoNames = {
         "Man_surprised_nao.mp4",
         "Dog_happy_nao.mp4",
@@ -217,14 +223,16 @@ class RefereeNode : public rclcpp::Node
 public:
     RefereeNode() : rclcpp::Node("referee_node"), rng_(std::random_device{}())
     {
-        declare_parameter<std::string>("bottle_video_path", DEFAULT_BOTTLE_VIDEO_PATH);
-        declare_parameter<std::string>("face_video_path", DEFAULT_FACE_VIDEO_PATH);
+        // Empty (the default) means "pick randomly each round" - only set
+        // these to force the same video every round, for testing.
+        declare_parameter<std::string>("bottle_video_path", "");
+        declare_parameter<std::string>("face_video_path", "");
+        declare_parameter<int>("rounds", kDefaultRounds);
 
         head_publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/head_controller/joint_trajectory", 10);
         arm_publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/arm_controller/joint_trajectory", 10);
 
-        // Give head_controller/arm_controller a moment to come up before publishing.
-        timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_once, this));
+        // Give head_controller/arm_controller a moment to come up before playing.
         timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_game, this));
     }
 
@@ -285,6 +293,8 @@ private:
         }
     }
 
+    // Returns the fixed override from parameter_name if one was set,
+    // otherwise a uniformly random pick from names within directory.
     std::string pick_video_path(const std::string& parameter_name, const std::string& directory,
                                  const std::vector<std::string>& names)
     {
