@@ -24,12 +24,26 @@
 #include <chrono>
 #include <cmath>
 #include <optional>
+#include <random>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace std::chrono_literals;
 
 namespace
 {
+    const std::vector<std::string> kBottleVideoNames = {
+        "left_bottle_nao.mp4",  "left_down_bottle_nao.mp4",  "left_up_bottle_nao.mp4",
+        "right_bottle_nao.mp4", "right_down_bottle_nao.mp4", "right_up_bottle_nao.mp4",
+    };
+
+    const std::vector<std::string> kFaceVideoNames = {
+        "Man_surprised_nao.mp4",
+        "Dog_happy_nao.mp4",
+        "Background_no_person_nao.mp4",
+    };
+
     // Points whichever arm is on the same side as the head turn (positive
     // yaw = left, matching HeadPose's convention), by swinging that
     // shoulder outward proportionally to how far round the head turned, and
@@ -201,7 +215,7 @@ namespace
 class RefereeNode : public rclcpp::Node
 {
 public:
-    RefereeNode() : rclcpp::Node("referee_node")
+    RefereeNode() : rclcpp::Node("referee_node"), rng_(std::random_device{}())
     {
         declare_parameter<std::string>("bottle_video_path", DEFAULT_BOTTLE_VIDEO_PATH);
         declare_parameter<std::string>("face_video_path", DEFAULT_FACE_VIDEO_PATH);
@@ -211,16 +225,39 @@ public:
 
         // Give head_controller/arm_controller a moment to come up before publishing.
         timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_once, this));
+        timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_game, this));
     }
 
 private:
-    void run_once()
+    static constexpr int kDefaultRounds = 3;
+    static constexpr double kMinWaitSeconds = 3.0;
+    static constexpr double kMaxWaitSeconds = 5.0;
+
+    void run_game()
     {
         timer_->cancel();
 
+        const int rounds = get_parameter("rounds").as_int();
+        for (int round = 1; round <= rounds; ++round)
+        {
+            RCLCPP_INFO(get_logger(), "--- round %d/%d ---", round, rounds);
+            play_round();
+
+            if (round < rounds)
+            {
+                const double wait_seconds = random_wait_seconds();
+                RCLCPP_INFO(get_logger(), "waiting %.1fs before the next round", wait_seconds);
+                std::this_thread::sleep_for(std::chrono::duration<double>(wait_seconds));
+            }
+        }
+        RCLCPP_INFO(get_logger(), "--- game over ---");
+    }
+
+    void play_round()
+    {
         publish_watching_head();
 
-        const std::string video_path = get_parameter("bottle_video_path").as_string();
+        const std::string video_path = pick_video_path("bottle_video_path", BOTTLE_EXAMPLES_DIR, kBottleVideoNames);
         const auto pose = find_settled_head_pose(video_path, get_logger());
         if (!pose)
         {
@@ -236,7 +273,7 @@ private:
         publish_head(pose->yaw_radians, 0.0);
         publish_pointing_arm(pose->yaw_radians);
 
-        const std::string face_video_path = get_parameter("face_video_path").as_string();
+        const std::string face_video_path = pick_video_path("face_video_path", FACE_EXAMPLES_DIR, kFaceVideoNames);
         if (video_has_face(face_video_path, get_logger()))
         {
             RCLCPP_INFO(get_logger(), "detect_face -> found someone - ask them to spin next");
@@ -246,6 +283,24 @@ private:
             RCLCPP_INFO(get_logger(), "detect_face -> no one there - ask the group to spin again");
             publish_confused();
         }
+    }
+
+    std::string pick_video_path(const std::string& parameter_name, const std::string& directory,
+                                 const std::vector<std::string>& names)
+    {
+        const std::string override_path = get_parameter(parameter_name).as_string();
+        if (!override_path.empty())
+        {
+            return override_path;
+        }
+        std::uniform_int_distribution<size_t> distribution(0, names.size() - 1);
+        return directory + "/" + names[distribution(rng_)];
+    }
+
+    double random_wait_seconds()
+    {
+        std::uniform_real_distribution<double> distribution(kMinWaitSeconds, kMaxWaitSeconds);
+        return distribution(rng_);
     }
 
     // How long a publish_head_now trajectory point takes to physically
@@ -331,6 +386,7 @@ private:
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr head_publisher_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr arm_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
+    std::mt19937 rng_;
 };
 
 int main(int argc, char** argv)
