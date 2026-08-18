@@ -16,9 +16,11 @@ set(BOTTLE_EXAMPLES_DIR "${VISION_STANDALONE_DIR}/data/bottle_examples")
 set(FACE_EXAMPLES_DIR "${VISION_STANDALONE_DIR}/data/faces_examples")
 set(FACE_MODEL_PATH "${VISION_STANDALONE_DIR}/data/face_detection_yunet_2023mar.onnx")
 
-add_executable(referee_node
-    src/referee_node.cpp
+# robot_gesture (arm-pose math) and settle_watcher (real-footage decisions)
+# are shared between referee_node and referee_logic_tests.
+set(REFEREE_LOGIC_SOURCES
     src/robot_gesture.cpp
+    src/settle_watcher.cpp
     ${VISION_STANDALONE_DIR}/src/pre_game.cpp
     ${VISION_STANDALONE_DIR}/src/vision_common.cpp
     ${VISION_STANDALONE_DIR}/src/line_projection.cpp
