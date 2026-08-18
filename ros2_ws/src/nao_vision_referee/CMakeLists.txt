@@ -18,19 +18,27 @@ set(FACE_MODEL_PATH "${VISION_STANDALONE_DIR}/data/face_detection_yunet_2023mar.
 
 add_executable(referee_node
     src/referee_node.cpp
+    src/robot_gesture.cpp
     ${VISION_STANDALONE_DIR}/src/pre_game.cpp
     ${VISION_STANDALONE_DIR}/src/vision_common.cpp
     ${VISION_STANDALONE_DIR}/src/line_projection.cpp
     ${VISION_STANDALONE_DIR}/src/world_coordinates.cpp
     ${VISION_STANDALONE_DIR}/src/face_detection.cpp
 )
-
-target_include_directories(referee_node PRIVATE ${VISION_STANDALONE_DIR}/include ${OpenCV_INCLUDE_DIRS})
-target_compile_definitions(referee_node PRIVATE
+set(REFEREE_LOGIC_INCLUDE_DIRS include ${VISION_STANDALONE_DIR}/include ${OpenCV_INCLUDE_DIRS})
+set(REFEREE_LOGIC_COMPILE_DEFINITIONS
     BOTTLE_EXAMPLES_DIR="${BOTTLE_EXAMPLES_DIR}"
     FACE_EXAMPLES_DIR="${FACE_EXAMPLES_DIR}"
     FACE_MODEL_PATH="${FACE_MODEL_PATH}"
 )
+
+add_executable(referee_node
+    src/referee_node.cpp
+    ${REFEREE_LOGIC_SOURCES}
+)
+
+target_include_directories(referee_node PRIVATE ${REFEREE_LOGIC_INCLUDE_DIRS})
+target_compile_definitions(referee_node PRIVATE ${REFEREE_LOGIC_COMPILE_DEFINITIONS})
 # Plain (non-keyword) form: ament_target_dependencies uses the plain form
 # internally, and CMake disallows mixing keyword/plain target_link_libraries
 # calls on the same target.
