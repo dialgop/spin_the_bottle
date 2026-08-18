@@ -11,21 +11,19 @@
 // wiring end-to-end; a real or simulated camera feed is the natural
 // follow-up. Either way (no valid target, or no face found), NAO resets to
 // a neutral "confused" pose instead.
+//
+// The reusable logic (robot_gesture, settle_watcher) lives in separate
+// header/src pairs so tests/referee_logic_tests.cpp can exercise it without
+// a running ROS graph.
 #include "face_detection.h"
-#include "line_projection.h"
-#include "pre_game.h"
-#include "world_coordinates.h"
+#include "robot_gesture.h"
+#include "settle_watcher.h"
 
 #include <rclcpp/rclcpp.hpp>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 
-#include <opencv2/videoio.hpp>
-
-#include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <optional>
 #include <random>
 #include <string>
 #include <thread>
@@ -49,173 +47,6 @@ namespace
         "Dog_happy_nao.mp4",
         "Background_no_person_nao.mp4",
     };
-
-    // Points whichever arm is on the same side as the head turn (positive
-    // yaw = left, matching HeadPose's convention), by swinging that
-    // shoulder outward proportionally to how far round the head turned, and
-    // straightening its elbow; the other arm hangs down at the side, like a
-    // normal standing pose, rather than held out in front. Not derived from
-    // vision_standalone - this is robot-arm kinematics, not vision, so it
-    // lives here rather than in the vision pipeline.
-    //
-    // NAO's elbow roll range never includes 0 on either side (left is
-    // always negative, right always positive), unlike shoulder roll, so the
-    // resting arm needs a real resting bend rather than a plain 0.0.
-    struct ArmPose
-    {
-        bool use_left_arm;
-        double l_shoulder_pitch_radians;
-        double l_shoulder_roll_radians;
-        double l_elbow_yaw_radians;
-        double l_elbow_roll_radians;
-        double r_shoulder_pitch_radians;
-        double r_shoulder_roll_radians;
-        double r_elbow_yaw_radians;
-        double r_elbow_roll_radians;
-    };
-
-    ArmPose compute_arm_pose(double head_yaw_radians)
-    {
-        constexpr double kPointingShoulderPitch = -0.3; // raises the arm from resting (0 = horizontal forward)
-        constexpr double kRestingShoulderPitch = 1.5;   // arm down at the side, like a normal standing pose
-        constexpr double kMaxShoulderRoll = 1.0;        // stays inside NAO's real ~1.33 rad shoulder-roll range
-        constexpr double kPointingElbowRoll = 0.2;      // near-straight, extended for pointing
-        constexpr double kRestingElbowRoll = 0.3;       // gentle bend, arm relaxed at the side
-
-        const bool use_left_arm = head_yaw_radians >= 0.0;
-        const double roll_magnitude = std::min(std::abs(head_yaw_radians), kMaxShoulderRoll);
-
-        ArmPose pose{};
-        pose.use_left_arm = use_left_arm;
-        pose.l_shoulder_pitch_radians = use_left_arm ? kPointingShoulderPitch : kRestingShoulderPitch;
-        pose.l_shoulder_roll_radians = use_left_arm ? roll_magnitude : 0.0;
-        pose.l_elbow_yaw_radians = 0.0;
-        pose.l_elbow_roll_radians = use_left_arm ? -kPointingElbowRoll : -kRestingElbowRoll;
-        pose.r_shoulder_pitch_radians = use_left_arm ? kRestingShoulderPitch : kPointingShoulderPitch;
-        pose.r_shoulder_roll_radians = use_left_arm ? 0.0 : -roll_magnitude;
-        pose.r_elbow_yaw_radians = 0.0;
-        pose.r_elbow_roll_radians = use_left_arm ? kRestingElbowRoll : kPointingElbowRoll;
-
-        return pose;
-    }
-
-    // "Confused, please spin again" gesture: both arms raised and opened
-    // outward symmetrically, unlike compute_arm_pose's one-points/one-rests
-    // shape. Used when there's nowhere to point (no valid target, or no
-    // face found there) - not derived from vision_standalone, same as
-    // compute_arm_pose.
-    struct ConfusedArmPose
-    {
-        double shoulder_pitch_radians;
-        double shoulder_roll_magnitude_radians;
-        double elbow_roll_magnitude_radians;
-    };
-
-    constexpr ConfusedArmPose kConfusedArmPose{-0.2, 0.6, 0.3};
-
-    // Steps through video_path frame by frame until the bottle has been
-    // still for kSettleStreak consecutive frames after genuinely moving
-    // (mirrors vision_standalone/src/main.cpp's per-frame pipeline), then
-    // returns the head pose the latest frame points to. A real hand-spun
-    // bottle can pause for a single frame mid-spin - requiring a streak
-    // instead of just one still frame avoids grabbing that false stop
-    // instead of where it actually ends up. Returns std::nullopt if the
-    // video can't be opened, the bottle never settles, or the settled frame
-    // doesn't yield a usable target - callers only need to know whether
-    // there's somewhere to look.
-    //
-    // Frame reads are paced to the video's own frame rate, so this call
-    // blocks for as long as the bottle actually took to settle in the
-    // recording - a real robot watching a live feed couldn't know that
-    // duration in advance either, so this doesn't precompute or fake it.
-    std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
-                                                                       const rclcpp::Logger& logger)
-    {
-        constexpr int kSettleStreak = 5;
-
-        cv::VideoCapture capture(video_path);
-        if (!capture.isOpened())
-        {
-            RCLCPP_ERROR(logger, "failed to open video: %s", video_path.c_str());
-            return std::nullopt;
-        }
-
-        const double fps = capture.get(cv::CAP_PROP_FPS) > 0.0 ? capture.get(cv::CAP_PROP_FPS) : 30.0;
-        const auto frame_period = std::chrono::duration<double>(1.0 / fps);
-
-        cv::Mat previous_frame, frame;
-        bool seen_movement = false;
-        int still_streak = 0;
-        int frame_index = 0;
-        while (capture.read(frame))
-        {
-            std::this_thread::sleep_for(frame_period);
-
-            if (!previous_frame.empty())
-            {
-                const bool moving = pre_game::movement_detected(frame, previous_frame);
-                if (moving)
-                {
-                    seen_movement = true;
-                    still_streak = 0;
-                }
-                else if (seen_movement)
-                {
-                    ++still_streak;
-                    if (still_streak >= kSettleStreak)
-                    {
-                        RCLCPP_INFO(logger, "bottle settled at frame %d", frame_index);
-
-                        const line_projection::PointingArea area = line_projection::find_pointing_area(frame);
-                        const auto line = line_projection::compute_pointing_line(frame, area);
-                        if (!line)
-                        {
-                            RCLCPP_WARN(logger, "settled frame has no fittable bottle silhouette");
-                            return std::nullopt;
-                        }
-
-                        const world_coordinates::WorldPoint world_point =
-                            world_coordinates::to_world_coordinates(line->ellipse.center, line->angle_degrees, frame);
-                        const auto target = world_coordinates::find_target_point(world_point);
-                        if (!target)
-                        {
-                            RCLCPP_WARN(logger, "pointing angle doesn't land on a valid target region");
-                            return std::nullopt;
-                        }
-
-                        return world_coordinates::compute_head_pose(*target);
-                    }
-                }
-            }
-            previous_frame = frame.clone();
-            ++frame_index;
-        }
-
-        RCLCPP_WARN(logger, "bottle never settled in %d frame(s) from %s", frame_index, video_path.c_str());
-        return std::nullopt;
-    }
-
-    // Scans every frame of video_path for a face, stopping at the first hit.
-    // Mirrors face_detection_tests.cpp's any_frame_has_face helper.
-    bool video_has_face(const std::string& video_path, const rclcpp::Logger& logger)
-    {
-        cv::VideoCapture capture(video_path);
-        if (!capture.isOpened())
-        {
-            RCLCPP_ERROR(logger, "failed to open video: %s", video_path.c_str());
-            return false;
-        }
-
-        cv::Mat frame;
-        while (capture.read(frame))
-        {
-            if (face_detection::detect_face(frame))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
 }
 
 class RefereeNode : public rclcpp::Node
@@ -266,7 +97,7 @@ private:
         publish_watching_head();
 
         const std::string video_path = pick_video_path("bottle_video_path", BOTTLE_EXAMPLES_DIR, kBottleVideoNames);
-        const auto pose = find_settled_head_pose(video_path, get_logger());
+        const auto pose = settle_watcher::find_settled_head_pose(video_path, get_logger());
         if (!pose)
         {
             RCLCPP_WARN(get_logger(), "no head pose to publish - ask for the bottle to be spun again");
@@ -282,7 +113,7 @@ private:
         publish_pointing_arm(pose->yaw_radians);
 
         const std::string face_video_path = pick_video_path("face_video_path", FACE_EXAMPLES_DIR, kFaceVideoNames);
-        if (video_has_face(face_video_path, get_logger()))
+        if (settle_watcher::video_has_face(face_video_path, get_logger()))
         {
             RCLCPP_INFO(get_logger(), "detect_face -> found someone - ask them to spin next");
         }
@@ -353,7 +184,7 @@ private:
 
     void publish_pointing_arm(double head_yaw_radians)
     {
-        const ArmPose arm_pose = compute_arm_pose(head_yaw_radians);
+        const robot_gesture::ArmPose arm_pose = robot_gesture::compute_arm_pose(head_yaw_radians);
 
         trajectory_msgs::msg::JointTrajectory message;
         message.joint_names = {"LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll",
@@ -376,6 +207,8 @@ private:
     void publish_confused()
     {
         publish_head(0.0, 0.0);
+
+        using robot_gesture::kConfusedArmPose;
 
         trajectory_msgs::msg::JointTrajectory message;
         message.joint_names = {"LShoulderPitch", "LShoulderRoll", "LElbowYaw", "LElbowRoll",
