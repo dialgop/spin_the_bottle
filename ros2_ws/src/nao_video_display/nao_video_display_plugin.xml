@@ -1,0 +1,6 @@
+<library path="nao_video_display">
+  <class name="nao_video_display::ImageDisplayPlugin" type="nao_video_display::ImageDisplayPlugin"
+         base_class_type="webots_ros2_driver::PluginInterface">
+    <description>Renders recorded bottle-spin video frames onto a Webots Display device.</description>
+  </class>
+</library>
