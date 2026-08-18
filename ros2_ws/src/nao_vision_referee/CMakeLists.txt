@@ -49,4 +49,18 @@ ament_target_dependencies(referee_node rclcpp trajectory_msgs)
 
 install(TARGETS referee_node DESTINATION lib/${PROJECT_NAME})
 
+enable_testing()
+
+add_executable(referee_logic_tests
+    tests/referee_logic_tests.cpp
+    ${REFEREE_LOGIC_SOURCES}
+)
+
+target_include_directories(referee_logic_tests PRIVATE ${REFEREE_LOGIC_INCLUDE_DIRS})
+target_compile_definitions(referee_logic_tests PRIVATE ${REFEREE_LOGIC_COMPILE_DEFINITIONS})
+target_link_libraries(referee_logic_tests ${OpenCV_LIBS})
+ament_target_dependencies(referee_logic_tests rclcpp)
+
+add_test(NAME referee_logic_tests COMMAND referee_logic_tests)
+
 ament_package()
