@@ -15,7 +15,7 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         (os.path.join('share', package_name, 'worlds'), glob('worlds/*.wbt')),
         (os.path.join('share', package_name, 'resource'),
-         ['resource/nao_webots.urdf', 'resource/ros2_control.yml']),
+         ['resource/nao_webots.urdf', 'resource/ros2_control.yml', 'resource/bottle_screen.urdf']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

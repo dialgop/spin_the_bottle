@@ -65,3 +65,33 @@ Nao {
     ""
   ]
 }
+# Shows the same recorded bottle-spin footage the referee_node is watching,
+# via a custom nao_video_display plugin - a Display device's first child
+# must be a Shape with an ImageTexture for the device's drawn image to
+# render onto it, per Webots' own Display device convention.
+DEF BottleScreen Robot {
+  translation 0 0.5 0.02
+  name "BottleScreen"
+  controller "<extern>"
+  children [
+    Display {
+      name "screen"
+      width 320
+      height 240
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColorMap ImageTexture {
+              filtering 0
+            }
+            roughness 1
+            metalness 0
+          }
+          geometry Plane {
+            size 0.4 0.3
+          }
+        }
+      ]
+    }
+  ]
+}

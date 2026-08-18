@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<robot name="Bottle Screen">
+    <webots>
+        <plugin type="nao_video_display::ImageDisplayPlugin" />
+    </webots>
+</robot>

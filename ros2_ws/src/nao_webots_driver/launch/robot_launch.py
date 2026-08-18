@@ -35,6 +35,7 @@ def generate_launch_description():
     package_dir = get_package_share_directory('nao_webots_driver')
     robot_description_path = os.path.join(package_dir, 'resource', 'nao_webots.urdf')
     ros2_control_params = os.path.join(package_dir, 'resource', 'ros2_control.yml')
+    bottle_screen_description_path = os.path.join(package_dir, 'resource', 'bottle_screen.urdf')
 
     webots = WebotsLauncher(
         world=os.path.join(package_dir, 'worlds', 'nao_ros2.wbt'),
@@ -47,6 +48,18 @@ def generate_launch_description():
             {'robot_description': robot_description_path,
              'use_sim_time': True},
             ros2_control_params,
+        ],
+        respawn=True,
+    )
+
+    # Renders the bottle-spin video referee_node is watching onto the
+    # BottleScreen prop's Display device, via the custom nao_video_display
+    # plugin declared in bottle_screen.urdf.
+    bottle_screen_driver = WebotsController(
+        robot_name='BottleScreen',
+        parameters=[
+            {'robot_description': bottle_screen_description_path,
+             'use_sim_time': True},
         ],
         respawn=True,
     )
@@ -97,6 +110,7 @@ def generate_launch_description():
         webots._supervisor,
         robot_state_publisher,
         nao_driver,
+        bottle_screen_driver,
         waiting_nodes,
 
         # This action will kill all nodes once the Webots simulation has exited
