@@ -11,8 +11,9 @@
 
 namespace settle_watcher
 {
-    std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
-                                                                       const rclcpp::Logger& logger)
+    std::optional<world_coordinates::HeadPose> find_settled_head_pose(
+        const std::string& video_path, const rclcpp::Logger& logger,
+        const std::function<void(const cv::Mat&)>& on_frame)
     {
         constexpr int kSettleStreak = 5;
 
@@ -33,6 +34,8 @@ namespace settle_watcher
         while (capture.read(frame))
         {
             std::this_thread::sleep_for(frame_period);
+
+            if (on_frame) on_frame(frame);
 
             if (!previous_frame.empty())
             {

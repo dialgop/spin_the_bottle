@@ -12,6 +12,11 @@
 // follow-up. Either way (no valid target, or no face found), NAO resets to
 // a neutral "confused" pose instead.
 //
+// Each bottle-video frame is also republished as a plain sensor_msgs/Image
+// while it's being watched, for nao_video_display's plugin to render onto
+// the BottleScreen prop inside the simulation - so it's visible why NAO
+// turned the way it did, not just that it did.
+//
 // The reusable logic (robot_gesture, settle_watcher) lives in separate
 // header/src pairs so tests/referee_logic_tests.cpp can exercise it without
 // a running ROS graph.
@@ -19,7 +24,11 @@
 #include "robot_gesture.h"
 #include "settle_watcher.h"
 
+#include <cv_bridge/cv_bridge.hpp>
+
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/header.hpp>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 
@@ -62,6 +71,7 @@ public:
 
         head_publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/head_controller/joint_trajectory", 10);
         arm_publisher_ = create_publisher<trajectory_msgs::msg::JointTrajectory>("/arm_controller/joint_trajectory", 10);
+        bottle_video_publisher_ = create_publisher<sensor_msgs::msg::Image>("/bottle_video/image", 10);
 
         // Give head_controller/arm_controller a moment to come up before playing.
         timer_ = create_wall_timer(2s, std::bind(&RefereeNode::run_game, this));
@@ -97,7 +107,8 @@ private:
         publish_watching_head();
 
         const std::string video_path = pick_video_path("bottle_video_path", BOTTLE_EXAMPLES_DIR, kBottleVideoNames);
-        const auto pose = settle_watcher::find_settled_head_pose(video_path, get_logger());
+        const auto pose = settle_watcher::find_settled_head_pose(
+            video_path, get_logger(), std::bind(&RefereeNode::publish_bottle_frame, this, std::placeholders::_1));
         if (!pose)
         {
             RCLCPP_WARN(get_logger(), "no head pose to publish - ask for the bottle to be spun again");
@@ -226,8 +237,18 @@ private:
         arm_publisher_->publish(message);
     }
 
+    // find_settled_head_pose's on_frame callback - republishes each bottle
+    // video frame it reads so nao_video_display's plugin can render it onto
+    // the BottleScreen prop, in sync with the real-time watching.
+    void publish_bottle_frame(const cv::Mat& frame)
+    {
+        const auto message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame).toImageMsg();
+        bottle_video_publisher_->publish(*message);
+    }
+
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr head_publisher_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr arm_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr bottle_video_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
     std::mt19937 rng_;
 };

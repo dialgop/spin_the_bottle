@@ -4,6 +4,9 @@
 
 #include <rclcpp/rclcpp.hpp>
 
+#include <opencv2/core.hpp>
+
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -27,8 +30,15 @@ namespace settle_watcher
     // blocks for as long as the bottle actually took to settle in the
     // recording - a real robot watching a live feed couldn't know that
     // duration in advance either, so this doesn't precompute or fake it.
-    std::optional<world_coordinates::HeadPose> find_settled_head_pose(const std::string& video_path,
-                                                                       const rclcpp::Logger& logger);
+    //
+    // If on_frame is set, it's called with every frame as it's read (before
+    // the pacing sleep, after it's decoded), letting a caller show the same
+    // footage elsewhere (e.g. nao_video_display) in sync with the real-time
+    // watching - kept as a plain callback rather than a ROS publisher
+    // directly, so this function stays testable without a running ROS graph.
+    std::optional<world_coordinates::HeadPose> find_settled_head_pose(
+        const std::string& video_path, const rclcpp::Logger& logger,
+        const std::function<void(const cv::Mat&)>& on_frame = nullptr);
 
     // Scans every frame of video_path for a face, stopping at the first hit.
     // Mirrors vision_standalone's face_detection_tests any_frame_has_face

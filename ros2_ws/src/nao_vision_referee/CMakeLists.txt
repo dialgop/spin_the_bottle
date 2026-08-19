@@ -7,6 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(trajectory_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
 find_package(OpenCV 4 REQUIRED)
 
 # vision_standalone isn't a ROS package - its sources are compiled straight
@@ -45,7 +48,7 @@ target_compile_definitions(referee_node PRIVATE ${REFEREE_LOGIC_COMPILE_DEFINITI
 # internally, and CMake disallows mixing keyword/plain target_link_libraries
 # calls on the same target.
 target_link_libraries(referee_node ${OpenCV_LIBS})
-ament_target_dependencies(referee_node rclcpp trajectory_msgs)
+ament_target_dependencies(referee_node rclcpp trajectory_msgs sensor_msgs std_msgs cv_bridge)
 
 install(TARGETS referee_node DESTINATION lib/${PROJECT_NAME})
 
