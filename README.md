@@ -63,6 +63,9 @@ The bottle-color hue band in `vision_common.cpp` (`kBottleHueLow`/`kBottleHueHig
 
 - **`nao_webots_driver`** (done) — no simulated camera; NAO's "vision" is `vision_standalone`'s recorded footage (see above), not a Webots camera feed, which keeps the simulation light. `HeadYaw`/`HeadPitch`, both shoulders (`L`/`RShoulderPitch`, `L`/`RShoulderRoll`) and both elbows (`L`/`RElbowYaw`, `L`/`RElbowRoll`) are driven through `ros2_control` (`joint_trajectory_controller`s: `head_controller`, `arm_controller`), confirmed working end-to-end against a `nao_ros2.wbt` world (adapted from Webots' `nao_demo`, with NAO's controller set to `<extern>`). NAO's head and shoulder joints are modeled in Webots' `Nao.proto` as `Hinge2Joint` (2 degrees of freedom in one joint), which Webots can't auto-export to URDF, so `resource/nao_webots.urdf` is a hand-written joint chain (using NAO's real joint limits) published via a plain `robot_state_publisher` node, rather than relying on Webots' auto-export.
 - **`nao_vision_referee`** (done) — a `referee_node` that compiles `vision_standalone`'s `pre_game`/`line_projection`/`world_coordinates`/`face_detection` sources directly (no duplication), and plays a simulated game of a few rounds (3 by default). Each round: NAO looks down and waits for a randomly picked recorded bottle-spin video (one of all 6 `data/bottle_examples/` recordings, so every region and the dead zone all come up over enough rounds) to settle in real time - frame reads are paced to the video's own frame rate, so this genuinely takes as long as the recording does, not a precomputed/faked wait. If that lands on a valid target, NAO turns its head (level, not tilted down - `vision_standalone`'s real pitch is calibrated for aiming a camera, not for how this looks) and points with whichever arm is on that side (shoulder up, elbow straightened; not derived from `vision_standalone`, this is robot-arm kinematics), then checks a randomly picked recorded face video (one real face, one dog, one empty background) for a face. Either way - no valid target, or no face found - NAO resets to a neutral head and opens both arms in a "confused" gesture instead. Between rounds it waits a random 3-5 seconds. The face check reads a recorded video rather than a live/simulated camera frame, same as everything else here — it's there to test the ROS 2 wiring, not to be the final input source. The arm-pose math (`robot_gesture`) and real-footage decisions (`settle_watcher`) live in their own header/src pairs so `referee_logic_tests` can exercise them (against all 6 real bottle videos and all 3 real face videos) without a running ROS graph, wired into `ctest` the same way as `vision_standalone`'s own tests.
+- **`nao_video_display`** (done) — a custom `webots_ros2_driver` plugin (`webots_ros2_driver` has no built-in Display support, unlike Camera or the `ros2_control` joints) that renders the same bottle-spin footage `referee_node` is watching onto a `Display` device on a small stationary "BottleScreen" prop in the world, via `wb_display_image_paste`. `referee_node` republishes each frame `find_settled_head_pose` reads as a plain `sensor_msgs/Image`, so the footage plays inside the simulation in sync with NAO watching it, rather than only being visible in the terminal log. Webots renders a `Display` both as a 2D overlay in the corner and, since the device's first child is a textured `Plane`, as a real 3D-projected texture in the scene itself:
+
+  ![NAO pointing at a target, with the bottle-spin video that led to the decision projected onto a screen in the scene and shown as a corner overlay](vision_standalone/data/readme_imgs/Nao_bottle_video.jpg)
 
 ### Future work
 
@@ -81,17 +84,20 @@ vision_standalone/                    ROS-free modern rework (2026-)
 ├── tests/                            pre_game_tests.cpp, line_projection_tests.cpp, world_coordinates_tests.cpp, face_detection_tests.cpp (wired into ctest)
 ├── data/                             face_detection_yunet_2023mar.onnx (model used by face_detection)
 │   ├── bottle_examples/              real recorded bottle-spin videos, for use with ./vision_standalone path/to.mp4
-│   └── faces_examples/               real face/dog/background videos, used by face_detection_tests
+│   ├── faces_examples/               real face/dog/background videos, used by face_detection_tests
+│   └── readme_imgs/                  screenshots embedded in this README
 └── CMakeLists.txt
 
 ros2_ws/                              ROS 2 (Jazzy) + Webots rework (2026-)
 └── src/
     ├── nao_webots_driver/            drives a simulated NAO's head via ros2_control
     │   ├── launch/robot_launch.py    launches Webots + the ros2_control bridge
-    │   ├── resource/                 nao_webots.urdf, ros2_control.yml
-    │   └── worlds/nao_ros2.wbt       Webots world (NAO set to an <extern> controller)
-    └── nao_vision_referee/           plays the simulated game - randomized rounds, points, checks for a face
-        ├── include/                  robot_gesture.h, settle_watcher.h
-        ├── src/                      referee_node.cpp + robot_gesture.cpp, settle_watcher.cpp (compiles vision_standalone's sources in directly)
-        └── tests/referee_logic_tests.cpp  wired into ctest, against all 6 bottle + 3 face videos
+    │   ├── resource/                 nao_webots.urdf, ros2_control.yml, bottle_screen.urdf
+    │   └── worlds/nao_ros2.wbt       Webots world (NAO + the BottleScreen prop, both <extern>)
+    ├── nao_vision_referee/           plays the simulated game - randomized rounds, points, checks for a face
+    │   ├── include/                  robot_gesture.h, settle_watcher.h
+    │   ├── src/                      referee_node.cpp + robot_gesture.cpp, settle_watcher.cpp (compiles vision_standalone's sources in directly)
+    │   └── tests/referee_logic_tests.cpp  wired into ctest, against all 6 bottle + 3 face videos
+    └── nao_video_display/            custom webots_ros2_driver plugin rendering video onto a Display device
+        └── src/image_display_plugin.cpp
 ```
