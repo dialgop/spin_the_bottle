@@ -8,6 +8,8 @@ find_package(OpenCV 4 REQUIRED)
 
 set(FACE_MODEL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data/face_detection_yunet_2023mar.onnx")
 set(FACE_EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data/faces_examples")
+set(BOTTLE_MODEL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data/bottle_detector_model.onnx")
+set(BOTTLE_EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data/bottle_examples")
 
 add_executable(vision_standalone
     src/main.cpp
@@ -16,11 +18,15 @@ add_executable(vision_standalone
     src/line_projection.cpp
     src/world_coordinates.cpp
     src/face_detection.cpp
+    src/bottle_detector.cpp
 )
 
 target_include_directories(vision_standalone PRIVATE include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(vision_standalone PRIVATE ${OpenCV_LIBS})
-target_compile_definitions(vision_standalone PRIVATE FACE_MODEL_PATH="${FACE_MODEL_PATH}")
+target_compile_definitions(vision_standalone PRIVATE
+    FACE_MODEL_PATH="${FACE_MODEL_PATH}"
+    BOTTLE_MODEL_PATH="${BOTTLE_MODEL_PATH}"
+)
 
 enable_testing()
 
@@ -69,3 +75,17 @@ target_compile_definitions(face_detection_tests PRIVATE
 )
 
 add_test(NAME face_detection_tests COMMAND face_detection_tests)
+
+add_executable(bottle_detector_tests
+    tests/bottle_detector_tests.cpp
+    src/bottle_detector.cpp
+)
+
+target_include_directories(bottle_detector_tests PRIVATE include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(bottle_detector_tests PRIVATE ${OpenCV_LIBS})
+target_compile_definitions(bottle_detector_tests PRIVATE
+    BOTTLE_MODEL_PATH="${BOTTLE_MODEL_PATH}"
+    BOTTLE_EXAMPLES_DIR="${BOTTLE_EXAMPLES_DIR}"
+)
+
+add_test(NAME bottle_detector_tests COMMAND bottle_detector_tests)

@@ -39,7 +39,36 @@ bool load_model(const std::string& model_path)
 
 std::optional<DetectedBottle> detect_bottle(const cv::Mat& bgr_image)
 {
-    return std::nullopt;
+    if (!model_loaded)
+    {
+        return std::nullopt;
+    }
+
+    // training resized frames the same plain way via cv2.resize, so a
+    // straight resize back is what matches the model's own preprocessing.
+    const cv::Mat blob = cv::dnn::blobFromImage(
+        bgr_image, 1.0 / 255.0, cv::Size(kInputSize, kInputSize), cv::Scalar(), /*swapRB=*/true, /*crop=*/false);
+    net.setInput(blob);
+    const cv::Mat output = net.forward();  // (1, 1, kInputSize, kInputSize) sigmoid probability map
+
+    const cv::Mat prob_small(kInputSize, kInputSize, CV_32F,
+                              const_cast<float*>(reinterpret_cast<const float*>(output.data)));
+    cv::Mat prob;
+    cv::resize(prob_small, prob, bgr_image.size());
+
+    cv::Mat mask;
+    cv::threshold(prob, mask, kProbThreshold, 255, cv::THRESH_BINARY);
+    mask.convertTo(mask, CV_8U);
+
+    if (cv::countNonZero(mask) < kMinMaskPixels)
+    {
+        return std::nullopt;
+    }
+
+    const cv::Rect bounds = cv::boundingRect(mask);
+    const float confidence = static_cast<float>(cv::mean(prob, mask)[0]);
+
+    return DetectedBottle{bounds, mask, confidence};
 }
 
 }
